@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-oidc-federation
+  labels:
+    run: github-oidc-federation
+spec:
+  ports:
+    - port: 3000
+      protocol: TCP
+      targetPort: 3000
+  selector:
+    role: github-oidc-federation
+  sessionAffinity: None
+  type: ClusterIP

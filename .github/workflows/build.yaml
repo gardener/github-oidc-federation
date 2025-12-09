@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+        description:
+          mode as expected by `gardener/cc-utils/.github/workflows/prepare`
+          either of
+          - snapshot
+          - release
+
+jobs:
+  prepare:
+    uses: gardener/cc-utils/.github/workflows/prepare.yaml@master
+    permissions:
+      contents: read
+    with:
+      mode: ${{ inputs.mode }}
+
+  oci-image:
+    name: Build OCI-Image
+    uses: gardener/cc-utils/.github/workflows/oci-ocm.yaml@master
+    needs:
+      - prepare
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      name: github-oidc-federation
+      version: ${{ needs.prepare.outputs.version }}
+      oci-registry: ${{ needs.prepare.outputs.oci-registry }}
+      oci-repository: github-oidc-federation
+      oci-platforms: linux/amd64
+      extra-tags: latest
+
+  helmchart:
+    name: Build Helmchart
+    uses: gardener/cc-utils/.github/workflows/helmchart-ocm.yaml@master
+    needs:
+      - prepare
+      - oci-image
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      name: github-oidc-federation
+      dir: charts/github-oidc-federation
+      oci-registry: ${{ needs.prepare.outputs.oci-registry }}
+      oci-repository: charts/github-oidc-federation
+      ocm-mappings: |
+        - ref: ocm-resource:github-oidc-federation.repository
+          attribute: image.repository
+        - ref: ocm-resource:github-oidc-federation.tag
+          attribute: image.tag

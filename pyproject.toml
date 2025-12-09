@@ -1,0 +1,4 @@
+[tool.bandit]
+skips = [
+  'B104', # we intendedly bind to `0.0.0.0` in productive environments only
+]

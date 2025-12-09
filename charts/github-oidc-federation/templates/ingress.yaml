@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: github-oidc-federation
+  annotations:
+    cert.gardener.cloud/purpose: managed
+    dns.gardener.cloud/class: garden
+    dns.gardener.cloud/dnsnames: '*'
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: github-oidc-federation.ci.gardener.cloud.sap
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: github-oidc-federation
+                port:
+                  number: 3000
+  tls:
+    - hosts:
+        - github-oidc-federation.ci.gardener.cloud.sap
+      secretName: github-oidc-federation-tls

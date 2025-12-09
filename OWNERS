@@ -1,0 +1,6 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+reviewers:
+- github-oidc-federation-reviewers
+approvers:
+- github-oidc-federation-approvers
