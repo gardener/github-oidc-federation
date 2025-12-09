@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: github-oidc-federation
+  {{- if default dict (.Values.ingress).annotations }}
+  annotations:
+    {{- range $annotation, $value := .Values.ingress.annotations }}
+    {{ $annotation }}: {{ $value }}
+    {{- end }}
+  {{- end }}
+spec:
+  ingressClassName: {{ default "nginx" (.Values.ingress).class }}
+  {{- if default list (.Values.ingress).hosts }}
+  rules:
+  {{- range $host := .Values.ingress.hosts }}
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: github-oidc-federation
+                port:
+                  number: 3000
+  {{- end }}
+  tls:
+    - hosts:
+      {{- range $host := .Values.ingress.hosts }}
+        - {{ $host }}
+      {{- end }}
+      secretName: github-oidc-federation-tls
+  {{- end }}

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-oidc-federation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: github-oidc-federation
+  template:
+    metadata:
+      labels:
+        role: github-oidc-federation
+    spec:
+      containers:
+        - name: github-oidc-federation
+          image: {{ include "image" .Values.image }}
+          args:
+            - --productive
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 250m
+          volumeMounts:
+            - name: github-oidc-federation
+              mountPath: /secrets
+      volumes:
+        - name: github-oidc-federation
+          secret:
+            secretName: github-oidc-federation

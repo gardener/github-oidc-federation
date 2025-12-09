@@ -1,0 +1,13 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+aliases:
+  github-oidc-federation-reviewers:
+  - 8R0WNI3
+  - ccwienk
+  - TuanAnh17N
+  - zkdev
+  github-oidc-federation-approvers:
+  - 8R0WNI3
+  - ccwienk
+  - TuanAnh17N
+  - zkdev
