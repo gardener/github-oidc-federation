@@ -2,16 +2,17 @@ import collections.abc
 import dataclasses
 import enum
 import functools
-import json
 import logging
 
 import dacite
 import falcon
 import github3
 import github3.apps
+import github3.exceptions
 import jwt
 import jwt.algorithms
 import requests
+import yaml
 
 import github
 
@@ -241,17 +242,20 @@ class TokenExchange:
             )
 
         repo_url = f'https://{host}/{organization}/.github'
-        logger.info(f'Fetching oidc-federation.json for {repo_url}')
+        logger.info(f'Fetching oidc-federation cfg for {repo_url}')
 
         try:
             github_api = self._github_api_lookup(repo_url)
             repo = github_api.repository(organization, '.github')
 
-            oidc_federation_raw = repo.file_contents('oidc-federation.json').decoded.decode()
+            try:
+                oidc_federation_raw = repo.file_contents('oidc-federation.yaml').decoded.decode()
+            except github3.exceptions.NotFoundError:
+                oidc_federation_raw = repo.file_contents('oidc-federation.json').decoded.decode()
         except Exception as e:
             logger.error(e)
             raise falcon.HTTPInternalServerError(
-                description='Failed to fetch oidc-federation.json',
+                description='Failed to fetch oidc-federation cfg',
             )
 
         logger.info(oidc_federation_raw)
@@ -264,12 +268,12 @@ class TokenExchange:
                     config=dacite.Config(
                         cast=[enum.Enum],
                     ),
-                ) for oidc_federation_entry in json.loads(oidc_federation_raw)
+                ) for oidc_federation_entry in yaml.safe_load(oidc_federation_raw)
             ]
         except Exception as e:
             logger.error(e)
             raise falcon.HTTPInternalServerError(
-                description='Failed to parse oidc-federation.json',
+                description='Failed to parse oidc-federation cfg',
             )
 
         for oidc_federation_entry in oidc_federation:
@@ -279,7 +283,7 @@ class TokenExchange:
             if oidc_federation_entry.subject != sub:
                 continue
 
-            logger.info('Found matching entry in oidc-federation.json')
+            logger.info('Found matching entry in oidc-federation cfg')
 
             if oidc_federation_entry.repositories is not None:
                 if not repositories:
@@ -326,7 +330,7 @@ class TokenExchange:
             break # found matching entry
         else:
             raise falcon.HTTPUnauthorized(
-                description='No matching entry in oidc-federation.json. Access not allowed',
+                description='No matching entry in oidc-federation cfg. Access not allowed',
             )
 
         for github_app_credential in self._github_app_credentials:
