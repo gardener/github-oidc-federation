@@ -1,0 +1,6 @@
+host: github.com
+app_id: ...
+private_key: |
+  -----BEGIN RSA PRIVATE KEY-----
+  ...
+  -----END RSA PRIVATE KEY-----
