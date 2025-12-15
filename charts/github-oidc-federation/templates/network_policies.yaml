@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  # select all pods in the namespace
+  podSelector: {}
+  # deny all traffic
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-from-github-oidc-federation
+spec:
+  podSelector:
+    matchLabels:
+      role: github-oidc-federation
+  policyTypes:
+    - Egress
+  egress:
+    - {} # Allows all egress traffic to any destination and port
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-github-oidc-federation
+spec:
+  podSelector:
+    matchLabels:
+      role: github-oidc-federation
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3000
