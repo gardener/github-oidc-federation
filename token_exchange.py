@@ -366,7 +366,7 @@ class TokenExchange:
             json={
                 'repositories': repositories,
                 'permissions': dict(
-                    (permission.replace('-', '-'), level)
+                    (permission.replace('-', '_'), level)
                     for permission, level in permissions.items()
                 ),
             }
