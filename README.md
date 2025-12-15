@@ -53,7 +53,7 @@ curl -sLS -X POST "<token-server-url>/token-exchange" \
 The supported permissions are mapped to the permissions of the central GitHub App in use. For a full
 list of available permissions for GitHub Apps, please refer to the
 [documentation](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps).
-The permission names are expected to be in snake_case format.
+The permission names are expected to be in kebab-case format.
 
 ## Usage in GitHub Actions
 
@@ -69,11 +69,11 @@ Action. Example:
     host: github.com # defaults to current GitHub host
     organization: gardener # defaults to current GitHub owner
     repositories: # defaults to all repositories of the specified `organization`
-        github-oidc-federation
-        cc-utils
+      github-oidc-federation
+      cc-utils
     permissions: | # defaults to `contents: read`
       contents: read
-      pull_requests: write
+      pull-requests: write
 - shell: bash
   run: |
     echo "${{ steps.token.outputs.token }}"

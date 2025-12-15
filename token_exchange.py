@@ -315,7 +315,7 @@ class TokenExchange:
                         is_allowed = False
 
             if repositories and any(
-                permission.startswith('organization_')
+                permission.startswith('organization')
                 for permission in permissions.keys()
             ):
                 logger.warning(
@@ -365,7 +365,10 @@ class TokenExchange:
             },
             json={
                 'repositories': repositories,
-                'permissions': permissions,
+                'permissions': dict(
+                    (permission.replace('-', '-'), level)
+                    for permission, level in permissions.items()
+                ),
             }
         )
 
