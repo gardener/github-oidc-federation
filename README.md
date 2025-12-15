@@ -15,8 +15,8 @@ organization, via a `oidc-federation.(yaml|json)` file.
 ## OIDC Federation Configuration
 
 To configure the federated access, a `oidc-federation.(yaml|json)` file is required in the target
-organization's `.github` repository. It is used to map the supported issuer and subject to the
-allowed repositories and permissions. Example:
+organization's `.github` repository. It is used to map the supported issuer and subject/token claim
+to the allowed repositories and permissions. Example:
 
 ```yaml
 - issuer: https://token.actions.githubusercontent.com
@@ -25,6 +25,10 @@ allowed repositories and permissions. Example:
     contents: read
   repositories: # can be omitted for global organization access
     - github-oidc-federation
+- issuer: https://token.actions.githubusercontent.com
+  principals:
+    - repository: gardener/github-oidc-federation
+      ref: refs/heads/foo
 ```
 
 ## Token Request
