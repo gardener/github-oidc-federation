@@ -48,9 +48,32 @@ class PermissionLevel(enum.StrEnum):
 @dataclasses.dataclass
 class OidcFederation:
     issuer: str
-    subject: str
+    subject: str | None
     permissions: dict[str, PermissionLevel]
     repositories: list[str] | None
+    principals: list[dict[str, str]] | None
+
+    def __post_init__(self):
+        if not self.subject and not self.principals:
+            raise ValueError('Either subject or principals must be specified')
+
+    def matches(self, payload: dict[str, str]) -> bool:
+        # always consider it a match if the exact subject matches
+        if self.subject and self.subject == payload.get('sub'):
+            return True
+
+        if not self.principals:
+            return False
+
+        # if the subject does not match, check the custom principals
+        for principal in self.principals:
+            for claim, value in principal.items():
+                if payload.get(claim) != value:
+                    break
+            else:
+                return True # found a matching principal
+
+        return False
 
 
 def fetch_with_retries(
@@ -280,7 +303,7 @@ class TokenExchange:
             if oidc_federation_entry.issuer != issuer:
                 continue
 
-            if oidc_federation_entry.subject != sub:
+            if not oidc_federation_entry.matches(payload):
                 continue
 
             logger.info('Found matching entry in oidc-federation cfg')
