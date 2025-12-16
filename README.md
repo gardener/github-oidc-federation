@@ -72,7 +72,7 @@ Action. Example:
     token-server: ${{ vars.FEDERATED_GITHUB_ACCESS_TOKEN_SERVER }}
     host: github.com # defaults to current GitHub host
     organization: gardener # defaults to current GitHub owner
-    repositories: # defaults to all repositories of the specified `organization`
+    repositories: | # defaults to all repositories of the specified `organization`
       github-oidc-federation
       cc-utils
     permissions: | # defaults to `contents: read`
