@@ -264,12 +264,17 @@ class TokenExchange:
                 description='Missing sub claim in token',
             )
 
-        repo_url = f'https://{host}/{organization}/.github'
+        if host == 'github.com':
+            repo_name = '.github-oidc'
+        else:
+            repo_name = '.github'
+
+        repo_url = f'https://{host}/{organization}/{repo_name}'
         logger.info(f'Fetching oidc-federation cfg for {repo_url}')
 
         try:
             github_api = self._github_api_lookup(repo_url)
-            repo = github_api.repository(organization, '.github')
+            repo = github_api.repository(organization, repo_name)
 
             try:
                 oidc_federation_raw = repo.file_contents('oidc-federation.yaml').decoded.decode()

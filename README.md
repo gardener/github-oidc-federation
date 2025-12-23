@@ -4,19 +4,19 @@ The GitHub OIDC Federation service provides the capability to exchange an OIDC i
 a short-lived GitHub access token. Hence, it allows cross GitHub instance/organization/repository
 access without the need for static credentials (e.g. GitHub service accounts, GitHub App private
 keys). The short-lived GitHub access tokens are created by a central GitHub App for the individual
-requesters. The federated access is managed in the `.github` repository of the target GitHub
-organization, via a `oidc-federation.(yaml|json)` file.
+requesters. The federated access is managed in the `.github-oidc` repository (`.github` for GHE) of
+the target GitHub organization, via a `oidc-federation.(yaml|json)` file.
 
 > [!NOTE]  
 > By design, the central GitHub App must be granted all the permissions requesters should be able to
 > request, and must be installed into the target GitHub organization with access to its repositories
-> (including the `.github` repository).
+> (including the `.github-oidc` or `.github` repository).
 
 ## OIDC Federation Configuration
 
 To configure the federated access, a `oidc-federation.(yaml|json)` file is required in the target
-organization's `.github` repository. It is used to map the supported issuer and subject/token claim
-to the allowed repositories and permissions. Example:
+organization's `.github-oidc` (`.github` for GHE) repository. It is used to map the supported issuer
+and subject/token claim to the allowed repositories and permissions. Example:
 
 ```yaml
 - issuer: https://token.actions.githubusercontent.com
