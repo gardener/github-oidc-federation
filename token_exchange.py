@@ -4,6 +4,8 @@ import enum
 import functools
 import logging
 
+import cachetools
+import cryptography.hazmat.primitives.asymmetric.rsa
 import dacite
 import falcon
 import github3
@@ -113,6 +115,91 @@ def fetch_with_retries(
     return res
 
 
+@cachetools.cached(cache=cachetools.TTLCache(maxsize=2048, ttl=60*60*24)) # 24h
+def retrieve_public_key(
+    issuer: str,
+    kid: str,
+    session: requests.Session,
+) -> cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey:
+    try:
+        openid_cfg_res = fetch_with_retries(
+            url=f'{issuer}/.well-known/openid-configuration',
+            session=session,
+        )
+    except Exception:
+        raise falcon.HTTPInternalServerError(
+            description='Failed to fetch issuer openid-configuration',
+        )
+
+    if not (jwks_uri := openid_cfg_res.json().get('jwks_uri')):
+        raise falcon.HTTPBadRequest(
+            description='Missing jwks_uri in issuer openid-configuration',
+        )
+
+    try:
+        jwks_res = fetch_with_retries(
+            url=jwks_uri,
+            session=session,
+        )
+    except Exception:
+        raise falcon.HTTPInternalServerError(
+            description='Failed to fetch issuer openid-configuration',
+        )
+
+    for jwk in jwks_res.json().get('keys', []):
+        if jwk.get('kid') != kid:
+            continue
+
+        return jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+
+    raise falcon.HTTPUnauthorized(
+        description='Token verification failed',
+    )
+
+
+@cachetools.cached(cache=cachetools.TTLCache(maxsize=32768, ttl=60*15)) # 15min
+def retrieve_oidc_federation_cfg(
+    repo_url: str,
+    github_api: github3.GitHub,
+) -> OidcFederation:
+    logger.info(f'Fetching oidc-federation cfg for {repo_url}')
+
+    _, organization, repo_name = repo_url.split('/')
+
+    try:
+        repo = github_api.repository(organization, repo_name)
+
+        try:
+            oidc_federation_raw = repo.file_contents('oidc-federation.yaml').decoded.decode()
+        except github3.exceptions.NotFoundError:
+            oidc_federation_raw = repo.file_contents('oidc-federation.json').decoded.decode()
+    except Exception as e:
+        logger.error(e)
+        raise falcon.HTTPInternalServerError(
+            description='Failed to fetch oidc-federation cfg',
+        )
+
+    logger.info(oidc_federation_raw)
+
+    try:
+        oidc_federation = [
+            dacite.from_dict(
+                data_class=OidcFederation,
+                data=oidc_federation_entry,
+                config=dacite.Config(
+                    cast=[enum.Enum],
+                ),
+            ) for oidc_federation_entry in yaml.safe_load(oidc_federation_raw)
+        ]
+    except Exception as e:
+        logger.error(e)
+        raise falcon.HTTPInternalServerError(
+            description='Failed to parse oidc-federation cfg',
+        )
+
+    return oidc_federation
+
+
 def github_host_to_api_url(host: str) -> str:
     if host == 'github.com':
         return f'https://api.{host}'
@@ -202,46 +289,16 @@ class TokenExchange:
                 description='Missing issuer in token',
             )
 
-        try:
-            openid_cfg_res = fetch_with_retries(
-                url=f'{issuer}/.well-known/openid-configuration',
-                session=self._session,
-            )
-        except Exception:
-            raise falcon.HTTPInternalServerError(
-                description='Failed to fetch issuer openid-configuration',
-            )
-
-        if not (jwks_uri := openid_cfg_res.json().get('jwks_uri')):
-            raise falcon.HTTPBadRequest(
-                description='Missing jwks_uri in issuer openid-configuration',
-            )
-
-        try:
-            jwks_res = fetch_with_retries(
-                url=jwks_uri,
-                session=self._session,
-            )
-        except Exception:
-            raise falcon.HTTPInternalServerError(
-                description='Failed to fetch issuer openid-configuration',
-            )
-
         header = jwt.get_unverified_header(token)
         logger.info(header)
 
         kid = header.get('kid')
 
-        for jwk in jwks_res.json().get('keys', []):
-            if jwk.get('kid') != kid:
-                continue
-
-            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
-            break
-        else:
-            raise falcon.HTTPUnauthorized(
-                description='Token verification failed',
-            )
+        public_key = retrieve_public_key(
+            issuer=issuer,
+            kid=kid,
+            session=self._session,
+        )
 
         try:
             payload = jwt.decode(
@@ -269,40 +326,14 @@ class TokenExchange:
         else:
             repo_name = '.github'
 
-        repo_url = f'https://{host}/{organization}/{repo_name}'
-        logger.info(f'Fetching oidc-federation cfg for {repo_url}')
+        repo_url = f'{host}/{organization}/{repo_name}'
 
-        try:
-            github_api = self._github_api_lookup(repo_url)
-            repo = github_api.repository(organization, repo_name)
+        github_api = self._github_api_lookup(repo_url)
 
-            try:
-                oidc_federation_raw = repo.file_contents('oidc-federation.yaml').decoded.decode()
-            except github3.exceptions.NotFoundError:
-                oidc_federation_raw = repo.file_contents('oidc-federation.json').decoded.decode()
-        except Exception as e:
-            logger.error(e)
-            raise falcon.HTTPInternalServerError(
-                description='Failed to fetch oidc-federation cfg',
-            )
-
-        logger.info(oidc_federation_raw)
-
-        try:
-            oidc_federation = [
-                dacite.from_dict(
-                    data_class=OidcFederation,
-                    data=oidc_federation_entry,
-                    config=dacite.Config(
-                        cast=[enum.Enum],
-                    ),
-                ) for oidc_federation_entry in yaml.safe_load(oidc_federation_raw)
-            ]
-        except Exception as e:
-            logger.error(e)
-            raise falcon.HTTPInternalServerError(
-                description='Failed to parse oidc-federation cfg',
-            )
+        oidc_federation = retrieve_oidc_federation_cfg(
+            repo_url=repo_url,
+            github_api=github_api,
+        )
 
         for oidc_federation_entry in oidc_federation:
             if oidc_federation_entry.issuer != issuer:

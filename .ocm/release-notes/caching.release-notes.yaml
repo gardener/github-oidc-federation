@@ -1,0 +1,11 @@
+release_notes:
+- audience: developer
+  author:
+    hostname: github.com
+    type: githubUser
+    username: 8R0WNI3
+  category: feature
+  contents: Added TTL caching for issuer public key and OIDC federation cfg
+  mimetype: text/markdown
+  reference: null
+  type: standard

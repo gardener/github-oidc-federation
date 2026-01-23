@@ -1,4 +1,6 @@
 bjoern
+cachetools
+cryptography
 dacite
 falcon
 gardener-cicd-libs
