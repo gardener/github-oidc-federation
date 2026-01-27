@@ -87,28 +87,34 @@ def fetch_with_retries(
     headers: dict | None=None,
     remaining_retries: int=3,
 ) -> requests.Response:
-    res = session.request(
-        method=method,
-        url=url,
-        json=json,
-        data=data,
-        headers=headers,
-    )
-
-    if not res.ok:
-        logger.warning(f'rq against {url=} failed: {res.status_code=} {res.reason=} {res.content=}')
-
-        if remaining_retries > 0:
-            logger.warning(f'Retrying... ({remaining_retries=})')
-            return fetch_with_retries(
-                url=url,
-                session=session,
-                method=method,
-                json=json,
-                data=data,
-                headers=headers,
-                remaining_retries=remaining_retries - 1,
+    try:
+        res = session.request(
+            method=method,
+            url=url,
+            json=json,
+            data=data,
+            headers=headers,
+        )
+        if not res.ok:
+            logger.warning(
+                f'rq against {url=} failed: {res.status_code=} {res.reason=} {res.content=}'
             )
+            rq_failed = True
+    except Exception as e:
+        logger.warning(f'rq against {url=} failed: {e}')
+        rq_failed = True
+
+    if rq_failed and remaining_retries > 0:
+        logger.warning(f'Retrying... ({remaining_retries=})')
+        return fetch_with_retries(
+            url=url,
+            session=session,
+            method=method,
+            json=json,
+            data=data,
+            headers=headers,
+            remaining_retries=remaining_retries - 1,
+        )
 
     res.raise_for_status()
 
