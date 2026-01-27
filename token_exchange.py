@@ -87,6 +87,7 @@ def fetch_with_retries(
     headers: dict | None=None,
     remaining_retries: int=3,
 ) -> requests.Response:
+    rq_failed = False
     try:
         res = session.request(
             method=method,
