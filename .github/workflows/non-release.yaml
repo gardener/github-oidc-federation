@@ -19,7 +19,6 @@ jobs:
     uses: gardener/cc-utils/.github/workflows/post-build.yaml@master
     needs:
       - build
-    secrets: inherit
     permissions:
       contents: write
       id-token: write
