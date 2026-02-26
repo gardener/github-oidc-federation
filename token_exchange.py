@@ -3,6 +3,7 @@ import dataclasses
 import enum
 import functools
 import logging
+import re
 
 import cachetools
 import cryptography.hazmat.primitives.asymmetric.rsa
@@ -207,6 +208,14 @@ def retrieve_oidc_federation_cfg(
     return oidc_federation
 
 
+def validate_repository(repository: str) -> bool:
+    # the repository name can only contain ASCII letters, digits, and the characters ., -, and _
+    # and must not be empty
+    pattern = re.compile(r'^[A-Za-z0-9._-]+$')
+
+    return bool(pattern.fullmatch(repository))
+
+
 def github_host_to_api_url(host: str) -> str:
     if host == 'github.com':
         return f'https://api.{host}'
@@ -288,6 +297,11 @@ class TokenExchange:
         if host not in self._allowed_hosts:
             raise falcon.HTTPUnauthorized(
                 description=f'The host {host} is not supported',
+            )
+
+        if repositories and any(not validate_repository(repository) for repository in repositories):
+            raise falcon.HTTPUnauthorized(
+                description=f'The repositories {repositories} are not supported',
             )
 
         decoded_jwt = jwt.decode(
