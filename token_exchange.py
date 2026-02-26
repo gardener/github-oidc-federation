@@ -241,6 +241,7 @@ class TokenExchange:
         self._github_api_lookup = github.github_app_api_lookup(github_app_credentials)
         self._expected_audience = expected_audience
         self._session = requests.Session()
+        self._allowed_hosts = set(app_cred.host for app_cred in github_app_credentials)
 
     def on_post(
         self,
@@ -282,6 +283,11 @@ class TokenExchange:
         ):
             raise falcon.HTTPBadRequest(
                 description='Repositories property must be an array of strings',
+            )
+
+        if host not in self._allowed_hosts:
+            raise falcon.HTTPUnauthorized(
+                description=f'The host {host} is not supported',
             )
 
         decoded_jwt = jwt.decode(
@@ -333,6 +339,7 @@ class TokenExchange:
         else:
             repo_name = '.github'
 
+        # at this point, we know the `host` is trusted since it is in the allow list
         repo_url = f'{host}/{organization}/{repo_name}'
 
         github_api = self._github_api_lookup(repo_url)
