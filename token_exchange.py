@@ -310,7 +310,12 @@ class TokenExchange:
         # at this point, we know the `host` is trusted since it is in the allow list
         repo_url = f'{host}/{organization}/{repo_name}'
 
-        github_api = self._github_api_lookup(repo_url)
+        try:
+            github_api = self._github_api_lookup(repo_url)
+        except (github3.exceptions.NotFoundError, ValueError):
+            raise falcon.HTTPUnauthorized(
+                description=f'The host {host} and org {organization} are not supported',
+            )
 
         oidc_federation = retrieve_oidc_federation_cfg(
             repo_url=repo_url,
