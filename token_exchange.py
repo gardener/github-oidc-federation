@@ -168,7 +168,7 @@ def retrieve_public_key(
 def retrieve_oidc_federation_cfg(
     repo_url: str,
     github_api: github3.GitHub,
-) -> OidcFederation:
+) -> list[OidcFederation]:
     logger.info(f'Fetching oidc-federation cfg for {repo_url}')
 
     _, organization, repo_name = repo_url.split('/')
