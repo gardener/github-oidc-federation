@@ -302,6 +302,28 @@ class TokenExchange:
                 description='Missing issuer in token',
             )
 
+        if host == 'github.com':
+            repo_name = '.github-oidc'
+        else:
+            repo_name = '.github'
+
+        # at this point, we know the `host` is trusted since it is in the allow list
+        repo_url = f'{host}/{organization}/{repo_name}'
+
+        github_api = self._github_api_lookup(repo_url)
+
+        oidc_federation = retrieve_oidc_federation_cfg(
+            repo_url=repo_url,
+            github_api=github_api,
+        )
+
+        allowed_issuers = set(oidc_fed_entry.issuer for oidc_fed_entry in oidc_federation)
+
+        if issuer not in allowed_issuers:
+            raise falcon.HTTPUnauthorized(
+                description=f'The issuer {issuer} is not supported',
+            )
+
         header = jwt.get_unverified_header(token)
         logger.info(header)
 
@@ -333,21 +355,6 @@ class TokenExchange:
             raise falcon.HTTPBadRequest(
                 description='Missing sub claim in token',
             )
-
-        if host == 'github.com':
-            repo_name = '.github-oidc'
-        else:
-            repo_name = '.github'
-
-        # at this point, we know the `host` is trusted since it is in the allow list
-        repo_url = f'{host}/{organization}/{repo_name}'
-
-        github_api = self._github_api_lookup(repo_url)
-
-        oidc_federation = retrieve_oidc_federation_cfg(
-            repo_url=repo_url,
-            github_api=github_api,
-        )
 
         for oidc_federation_entry in oidc_federation:
             if oidc_federation_entry.issuer != issuer:
