@@ -171,7 +171,7 @@ def retrieve_oidc_federation_cfg(
 ) -> list[OidcFederation]:
     logger.info(f'Fetching oidc-federation cfg for {repo_url}')
 
-    _, organization, repo_name = repo_url.split('/')
+    _, organization, repo_name = github.host_org_and_repo(repo_url)
 
     try:
         repo = github_api.repository(organization, repo_name)
