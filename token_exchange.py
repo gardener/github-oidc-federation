@@ -232,7 +232,7 @@ def installation_id_for_org(
 ) -> int:
     github_api.login_as_app(
         private_key_pem=private_key,
-        app_id=app_id,
+        app_id=str(app_id),
     )
 
     installation = github_api.app_installation_for_organization(organization)
