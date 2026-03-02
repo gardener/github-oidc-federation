@@ -442,7 +442,7 @@ class TokenExchange:
 
         jwt_token = github3.apps.create_token(
             private_key_pem=github_app_credential.private_key.encode(),
-            app_id=github_app_credential.app_id,
+            app_id=str(github_app_credential.app_id),
         )
 
         installation_id = installation_id_for_org(
