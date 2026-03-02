@@ -3,6 +3,7 @@ import dataclasses
 import enum
 import functools
 import logging
+import re
 
 import cachetools
 import cryptography.hazmat.primitives.asymmetric.rsa
@@ -168,10 +169,10 @@ def retrieve_public_key(
 def retrieve_oidc_federation_cfg(
     repo_url: str,
     github_api: github3.GitHub,
-) -> OidcFederation:
+) -> list[OidcFederation]:
     logger.info(f'Fetching oidc-federation cfg for {repo_url}')
 
-    _, organization, repo_name = repo_url.split('/')
+    _, organization, repo_name = github.host_org_and_repo(repo_url)
 
     try:
         repo = github_api.repository(organization, repo_name)
@@ -205,6 +206,14 @@ def retrieve_oidc_federation_cfg(
         )
 
     return oidc_federation
+
+
+def validate_repository(repository: str) -> bool:
+    # the repository name can only contain ASCII letters, digits, and the characters ., -, and _
+    # and must not be empty
+    pattern = re.compile(r'^[A-Za-z0-9._-]+$')
+
+    return bool(pattern.fullmatch(repository))
 
 
 def github_host_to_api_url(host: str) -> str:
@@ -241,6 +250,7 @@ class TokenExchange:
         self._github_api_lookup = github.github_app_api_lookup(github_app_credentials)
         self._expected_audience = expected_audience
         self._session = requests.Session()
+        self._allowed_hosts = set(app_cred.host for app_cred in github_app_credentials)
 
     def on_post(
         self,
@@ -284,6 +294,16 @@ class TokenExchange:
                 description='Repositories property must be an array of strings',
             )
 
+        if host not in self._allowed_hosts:
+            raise falcon.HTTPUnauthorized(
+                description=f'The host {host} is not supported',
+            )
+
+        if repositories and any(not validate_repository(repository) for repository in repositories):
+            raise falcon.HTTPUnauthorized(
+                description=f'The repositories {repositories} are not supported',
+            )
+
         decoded_jwt = jwt.decode(
             jwt=token,
             options={
@@ -294,6 +314,33 @@ class TokenExchange:
         if not (issuer := decoded_jwt.get('iss')):
             raise falcon.HTTPBadRequest(
                 description='Missing issuer in token',
+            )
+
+        if host == 'github.com':
+            repo_name = '.github-oidc'
+        else:
+            repo_name = '.github'
+
+        # at this point, we know the `host` is trusted since it is in the allow list
+        repo_url = f'{host}/{organization}/{repo_name}'
+
+        try:
+            github_api = self._github_api_lookup(repo_url)
+        except (github3.exceptions.NotFoundError, ValueError):
+            raise falcon.HTTPUnauthorized(
+                description=f'The host {host} and org {organization} are not supported',
+            )
+
+        oidc_federation = retrieve_oidc_federation_cfg(
+            repo_url=repo_url,
+            github_api=github_api,
+        )
+
+        allowed_issuers = set(oidc_fed_entry.issuer for oidc_fed_entry in oidc_federation)
+
+        if issuer not in allowed_issuers:
+            raise falcon.HTTPUnauthorized(
+                description=f'The issuer {issuer} is not supported',
             )
 
         header = jwt.get_unverified_header(token)
@@ -327,20 +374,6 @@ class TokenExchange:
             raise falcon.HTTPBadRequest(
                 description='Missing sub claim in token',
             )
-
-        if host == 'github.com':
-            repo_name = '.github-oidc'
-        else:
-            repo_name = '.github'
-
-        repo_url = f'{host}/{organization}/{repo_name}'
-
-        github_api = self._github_api_lookup(repo_url)
-
-        oidc_federation = retrieve_oidc_federation_cfg(
-            repo_url=repo_url,
-            github_api=github_api,
-        )
 
         for oidc_federation_entry in oidc_federation:
             if oidc_federation_entry.issuer != issuer:
