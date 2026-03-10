@@ -375,6 +375,7 @@ class TokenExchange:
                 description='Missing sub claim in token',
             )
 
+        found_matching_cfg = False
         for oidc_federation_entry in oidc_federation:
             if oidc_federation_entry.issuer != issuer:
                 continue
@@ -383,6 +384,7 @@ class TokenExchange:
                 continue
 
             logger.info('Found matching entry in oidc-federation cfg')
+            found_matching_cfg = True
 
             if oidc_federation_entry.repositories is not None:
                 if not repositories:
@@ -428,8 +430,16 @@ class TokenExchange:
 
             break # found matching entry
         else:
+            if found_matching_cfg:
+                description = (
+                    'The requested scope and/or permissions are not granted in the oidc-federation '
+                    'cfg. Access not allowed',
+                )
+            else:
+                description = 'No entry found in the oidc-federation cfg. Access not allowed',
+
             raise falcon.HTTPUnauthorized(
-                description='No matching entry in oidc-federation cfg. Access not allowed',
+                description=description,
             )
 
         for github_app_credential in self._github_app_credentials:
