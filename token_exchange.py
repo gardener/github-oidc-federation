@@ -433,10 +433,12 @@ class TokenExchange:
             if found_matching_cfg:
                 description = (
                     'The requested scope and/or permissions are not granted in the oidc-federation '
-                    'cfg. Access not allowed',
+                    f'cfg in "{repo_url}". Access not allowed',
                 )
             else:
-                description = 'No entry found in the oidc-federation cfg. Access not allowed',
+                description = (
+                    f'No entry found in the oidc-federation cfg in "{repo_url}". Access not allowed'
+                )
 
             raise falcon.HTTPUnauthorized(
                 description=description,
