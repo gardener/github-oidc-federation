@@ -12,3 +12,6 @@ ingress:
   annotations: {}
   class: nginx
   hosts: []
+networkPolicy:
+  ingressController:
+    enabled: true
