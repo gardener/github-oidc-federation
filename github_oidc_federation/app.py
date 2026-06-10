@@ -4,15 +4,18 @@ import argparse
 import collections.abc
 import os
 
-import bjoern
+import aiohttp.web
 import dacite
-import falcon
+import requests
 import yaml
 
 import ci.log
 import github
 
-import token_exchange
+from . import github_api
+from . import http_client
+from . import jwt_verifier
+from . import token_request_handler
 
 
 ci.log.configure_default_logging()
@@ -56,41 +59,20 @@ def run_app():
     host = '0.0.0.0' if parsed_arguments.productive else 'localhost'
     port = parsed_arguments.port
 
-    middleware = None
-
-    app = falcon.App(
-        middleware=middleware,
-    )
-
     github_app_credentials = list(iter_github_app_credentials(
         github_app_credentials_path=parsed_arguments.github_app_credentials_path,
     ))
 
-    app.add_route(
-        '/token-exchange',
-        token_exchange.TokenExchange(
-            github_app_credentials=github_app_credentials,
-            expected_audience=parsed_arguments.expected_audience,
-        ),
-    )
+    token_request_handler.ALLOWED_HOSTS = set(c.host for c in github_app_credentials)
+    token_request_handler.GITHUB_API_LOOKUP = github.github_app_api_lookup(github_app_credentials)
+    github_api.GITHUB_APP_CREDENTIALS = github_app_credentials
+    http_client.SESSION = requests.Session()
+    jwt_verifier.EXPECTED_AUDIENCE = parsed_arguments.expected_audience
 
-    if parsed_arguments.productive:
-        bjoern.run(app, host, port, reuse_port=True)
-    else:
-        print('running in development mode')
-        print()
-        print(f'listening at {host}:{port}')
-        print()
+    app = aiohttp.web.Application()
+    app.router.add_post('/token-exchange', token_request_handler.request_token)
 
-        import werkzeug.serving
-        werkzeug.serving.run_simple(
-            hostname=host,
-            port=port,
-            application=app,
-            use_reloader=True,
-            use_debugger=True,
-            extra_files=(), # might add cfg-files
-        )
+    aiohttp.web.run_app(app, host=host, port=port)
 
 
 if __name__ == '__main__':

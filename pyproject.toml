@@ -1,3 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "github-oidc-federation"
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp",
+    "cachetools",
+    "cryptography",
+    "dacite",
+    "gardener-cicd-libs",
+    "github3.py",
+    "pyjwt",
+    "pyyaml",
+    "requests",
+]
+
+[project.scripts]
+github-oidc-federation = "github_oidc_federation.app:run_app"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["github_oidc_federation*"]
+
 [tool.bandit]
 skips = [
   'B104', # we intendedly bind to `0.0.0.0` in productive environments only
