@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: github-oidc-federation
 spec:
+  replicas: 2
   selector:
     matchLabels:
       role: github-oidc-federation
