@@ -2,30 +2,43 @@ import enum
 import logging
 
 import aiohttp.web
-import cachetools
 import dacite
 import yaml
+from async_lru import alru_cache
 
-from .github_api import fetch_raw_oidc_config
+from .github_api import fetch_raw_oidc_config, find_credential
 from .models import OidcFederationEntry, TokenRequest
 
 
 logger = logging.getLogger(__name__)
 
 
-@cachetools.cached(cache=cachetools.TTLCache(maxsize=32768, ttl=60 * 15))  # 15min
-def retrieve_oidc_federation_config(token_request: TokenRequest) -> list[OidcFederationEntry]:
-    logger.info(f"Fetching oidc-federation-config for {token_request.repo_url}")
-    oidc_federation_raw = fetch_raw_oidc_config(token_request)
-    oidc_federation_config = _parse_raw_oidc_config(oidc_federation_raw)
+async def retrieve_oidc_federation_config(
+    token_request: TokenRequest,
+) -> list[OidcFederationEntry]:
+    oidc_federation_config = await _fetch_and_parse_oidc_config(
+        token_request.repo_url,
+        token_request.host,
+    )
 
     allowed_issuers = {entry.issuer for entry in oidc_federation_config}
     if token_request.issuer not in allowed_issuers:
         raise aiohttp.web.HTTPUnauthorized(
-            reason=f"The issuer {token_request.issuer} is not supported",
+            reason=f'The issuer {token_request.issuer} is not supported',
         )
 
     return oidc_federation_config
+
+
+@alru_cache(maxsize=32768, ttl=60 * 15)
+async def _fetch_and_parse_oidc_config(
+    repo_url: str,
+    host: str,
+) -> list[OidcFederationEntry]:
+    logger.info(f'Fetching oidc-federation-config for {repo_url}')
+    credential = find_credential(repo_url)
+    raw = await fetch_raw_oidc_config(repo_url, host, credential)
+    return _parse_raw_oidc_config(raw)
 
 
 def find_matching_entry(
@@ -39,13 +52,13 @@ def find_matching_entry(
     raise aiohttp.web.HTTPUnauthorized(
         reason=(
             f'No entry found in the oidc-federation cfg in "{token_request.repo_url}". '
-            "Access not allowed"
-        )
+            'Access not allowed'
+        ),
     )
 
 
 def _entry_matches_claims(entry: OidcFederationEntry, claims: dict) -> bool:
-    if entry.subject and entry.subject != claims.get("sub"):
+    if entry.subject and entry.subject != claims.get('sub'):
         return False
 
     if entry.principals:
@@ -66,6 +79,6 @@ def _parse_raw_oidc_config(oidc_federation_raw: str) -> list[OidcFederationEntry
     except Exception as e:
         logger.error(e)
         raise aiohttp.web.HTTPInternalServerError(
-            reason="Failed to parse oidc-federation cfg",
+            reason='Failed to parse oidc-federation cfg',
         )
     return oidc_federation_config
