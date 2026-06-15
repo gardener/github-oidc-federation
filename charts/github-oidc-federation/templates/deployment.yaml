@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: github-oidc-federation
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       role: github-oidc-federation
@@ -30,3 +30,10 @@ spec:
         - name: github-oidc-federation
           secret:
             secretName: github-oidc-federation
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              role: github-oidc-federation
