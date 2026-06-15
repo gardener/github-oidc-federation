@@ -28,7 +28,15 @@ version = {file = "VERSION"}
 where = ["."]
 include = ["github_oidc_federation*"]
 
+[tool.ruff]
+line-length = 101
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E203"]
+
 [tool.bandit]
+exclude_dirs = ['test']
 skips = [
   'B104', # we intendedly bind to `0.0.0.0` in productive environments only
 ]

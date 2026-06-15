@@ -39,12 +39,56 @@ jobs:
       oci-platforms: linux/amd64
       extra-tags: latest
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: lint
+        run: |
+          pip3 install --break-system-packages ruff bandit
+
+          blobs_dir=blobs.d
+          mkdir $blobs_dir
+          bandit_logfile=bandit.log
+          bandit_evidence="${blobs_dir}/bandit.tar.gz"
+
+          bandit_extra_args="-f txt -o ${bandit_logfile}" \
+            .ci/lint
+
+          tar czf $bandit_evidence $bandit_logfile pyproject.toml
+
+      - uses: gardener/cc-utils/.github/actions/export-ocm-fragments@v1
+        with:
+          ocm-resources: |
+            name: sast-linting-evidence
+            relation: local
+            access:
+              type: localBlob
+              localReference: bandit.tar.gz
+            labels:
+              - name: gardener.cloud/purposes
+                value:
+                  - lint
+                  - sast
+                  - pybandit
+              - name: gardener.cloud/comment
+                value: |
+                  we use bandit (linter) for SAST scans
+                  see: https://bandit.readthedocs.io/en/latest/
+          blobs-directory: blobs.d
+
   helmchart:
     name: Build Helmchart
     uses: gardener/cc-utils/.github/workflows/helmchart-ocm.yaml@v1
     needs:
       - prepare
       - oci-image
+      - lint
     permissions:
       contents: read
       packages: write

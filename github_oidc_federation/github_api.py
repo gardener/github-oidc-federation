@@ -22,13 +22,13 @@ def fetch_raw_oidc_config(token_request: TokenRequest) -> str:
     try:
         repo = token_request.github_api.repository(organization, repo_name)
         try:
-            oidc_federation_raw = repo.file_contents('oidc-federation.yaml').decoded.decode()
+            oidc_federation_raw = repo.file_contents("oidc-federation.yaml").decoded.decode()
         except github3.exceptions.NotFoundError:
-            oidc_federation_raw = repo.file_contents('oidc-federation.json').decoded.decode()
+            oidc_federation_raw = repo.file_contents("oidc-federation.json").decoded.decode()
     except Exception as e:
         logger.error(e)
         raise aiohttp.web.HTTPInternalServerError(
-            reason='Failed to fetch oidc-federation-config',
+            reason="Failed to fetch oidc-federation-config",
         )
     return oidc_federation_raw
 
@@ -39,7 +39,7 @@ def fetch_installation_token(token_request: TokenRequest, sub: str) -> dict:
             break
     else:
         raise aiohttp.web.HTTPInternalServerError(
-            reason=f'No matching GitHub App credentials for {token_request.repo_url}',
+            reason=f"No matching GitHub App credentials for {token_request.repo_url}",
         )
 
     jwt_token = github3.apps.create_token(
@@ -54,26 +54,30 @@ def fetch_installation_token(token_request: TokenRequest, sub: str) -> dict:
         app_id=github_app_credential.app_id,
     )
 
-    api_url = f'https://api.{token_request.host}' if token_request.host == 'github.com' else f'https://{token_request.host}/api/v3'
+    api_url = (
+        f"https://api.{token_request.host}"
+        if token_request.host == "github.com"
+        else f"https://{token_request.host}/api/v3"
+    )
     token_res = fetch_with_retries(
-        url=f'{api_url}/app/installations/{installation_id}/access_tokens',
+        url=f"{api_url}/app/installations/{installation_id}/access_tokens",
         headers={
-            'Authorization': f'Bearer {jwt_token}',
-            'User-Agent': f'github-oidc-federation: {token_request.issuer}:{sub}',
+            "Authorization": f"Bearer {jwt_token}",
+            "User-Agent": f"github-oidc-federation: {token_request.issuer}:{sub}",
         },
         json={
-            'repositories': token_request.requested_repositories,
-            'permissions': {
-                permission.replace('-', '_'): level
+            "repositories": token_request.requested_repositories,
+            "permissions": {
+                permission.replace("-", "_"): level
                 for permission, level in token_request.permissions.items()
             },
-        }
+        },
     )
 
     return token_res.json()
 
 
-@cachetools.cached(cache=cachetools.TTLCache(maxsize=1024, ttl=60*60*24)) # 24h
+@cachetools.cached(cache=cachetools.TTLCache(maxsize=1024, ttl=60 * 60 * 24))  # 24h
 def _get_installation_id_for_org(
     organization: str,
     github_api: github3.GitHub,
