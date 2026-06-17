@@ -129,5 +129,5 @@ stringData:
 
 ```bash
 # assuming the PWD is the repository root
-python3 app.py --github-app-credentials-path test
+python3 app.py --github-app-credentials-path test  
 ```
