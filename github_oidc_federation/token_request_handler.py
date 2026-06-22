@@ -1,29 +1,35 @@
+import collections.abc
 import logging
 import re
 
 import aiohttp.web
 
-from .github_api import find_credential, fetch_installation_token
-from .jwt_verifier import extract_issuer, verify_jwt
-from .models import OidcFederationEntry, PermissionLevel, TokenRequest
-from .oidc_config import retrieve_oidc_federation_config, find_matching_entry
-
+import github_oidc_federation.github_api as github_api
+import github_oidc_federation.jwt_verifier as jwt_verifier
+import github_oidc_federation.models as models
+import github_oidc_federation.oidc_config as oidc_config
 
 logger = logging.getLogger(__name__)
 
-_REPOSITORY_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
-
-ALLOWED_HOSTS: set[str] = set()
+_REPOSITORY_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
 
 async def request_token(request: aiohttp.web.Request) -> aiohttp.web.Response:
+    allowed_hosts: set[str] = request.app['allowed_hosts']
+    credentials = request.app['github_app_credentials']
+    audience: str = request.app['expected_audience']
+
     body = await request.json()
-    token_request: TokenRequest = _resolve_request(body)
-    oidc_federation_config = await retrieve_oidc_federation_config(token_request)
+    token_request: models.TokenRequest = _resolve_request(body, allowed_hosts, credentials)
+    oidc_federation_config = await oidc_config.retrieve_oidc_federation_config(
+        token_request, credentials
+    )
 
-    claims = await verify_jwt(token_request.jwt, token_request.issuer)
+    claims = await jwt_verifier.verify_jwt(token_request.raw_jwt, token_request.issuer, audience)
 
-    oidc_federation_config_entry = find_matching_entry(token_request, oidc_federation_config, claims)
+    oidc_federation_config_entry = oidc_config.find_matching_entry(
+        token_request, oidc_federation_config, claims
+    )
     if not _is_request_authorized(token_request, oidc_federation_config_entry):
         raise aiohttp.web.HTTPUnauthorized(
             reason=(
@@ -32,32 +38,35 @@ async def request_token(request: aiohttp.web.Request) -> aiohttp.web.Response:
             ),
         )
 
-    result = await fetch_installation_token(token_request, claims['sub'])
+    result = await github_api.fetch_installation_token(token_request, claims['sub'])
     return aiohttp.web.json_response(result)
 
 
-def _resolve_request(body: dict) -> TokenRequest:
-    token = body.get('token')
+def _resolve_request(
+    body: dict,
+    allowed_hosts: set[str],
+    credentials: collections.abc.Sequence[models.GitHubAppCredentials],
+) -> models.TokenRequest:
+    raw_jwt = body.get('token')
     host = body.get('host')
     organization = body.get('organization')
     permissions = body.get('permissions')
     repositories = body.get('repositories')
 
-    _validate_request(token, host, organization, permissions, repositories)
-    issuer = extract_issuer(token)
+    _validate_request(raw_jwt, host, organization, permissions, repositories, allowed_hosts)
+    issuer = jwt_verifier.extract_issuer(raw_jwt)
 
     repo_name = '.github-oidc' if host == 'github.com' else '.github'
     repo_url = f'{host}/{organization}/{repo_name}'
 
-    try:
-        credential = find_credential(repo_url)
-    except aiohttp.web.HTTPInternalServerError:
+    credential = github_api.find_credential(repo_url, credentials)
+    if credential is None:
         raise aiohttp.web.HTTPUnauthorized(
             reason=f'The host {host} and org {organization} are not supported',
         )
 
-    return TokenRequest(
-        jwt=token,
+    return models.TokenRequest(
+        raw_jwt=raw_jwt,
         host=host,
         organization=organization,
         permissions=permissions,
@@ -68,14 +77,21 @@ def _resolve_request(body: dict) -> TokenRequest:
     )
 
 
-def _validate_request(token, host, organization, permissions, repositories):
-    if not token:
+def _validate_request(
+    raw_jwt: str | None,
+    host: str | None,
+    organization: str | None,
+    permissions: dict | None,
+    repositories: list | None,
+    allowed_hosts: set[str],
+) -> None:
+    if not raw_jwt:
         raise aiohttp.web.HTTPBadRequest(reason='Missing token property')
 
     if not host:
         raise aiohttp.web.HTTPBadRequest(reason='Missing host property')
 
-    if host not in ALLOWED_HOSTS:
+    if host not in allowed_hosts:
         raise aiohttp.web.HTTPUnauthorized(reason=f'The host {host} is not supported')
 
     if not organization:
@@ -98,19 +114,19 @@ def _validate_request(token, host, organization, permissions, repositories):
 
 
 def _is_request_authorized(
-    token_request: TokenRequest,
-    entry: OidcFederationEntry,
+    token_request: models.TokenRequest,
+    entry: models.OidcFederationEntry,
 ) -> bool:
     return (
         _check_matching_repositories(token_request, entry)
         and _check_permissions(token_request, entry)
-        and _check_no_org_permissions_with_repositories(token_request)
+        and _check_org_permissions_without_repository_scope(token_request)
     )
 
 
 def _check_matching_repositories(
-    token_request: TokenRequest,
-    entry: OidcFederationEntry,
+    token_request: models.TokenRequest,
+    entry: models.OidcFederationEntry,
 ) -> bool:
     if entry.repositories:
         if not token_request.requested_repositories:
@@ -129,13 +145,13 @@ def _check_matching_repositories(
 
 
 def _check_permissions(
-    token_request: TokenRequest,
-    entry: OidcFederationEntry,
+    token_request: models.TokenRequest,
+    entry: models.OidcFederationEntry,
 ) -> bool:
     for permission, requested_level in token_request.permissions.items():
         allowed_level = entry.permissions.get(permission)
 
-        if not allowed_level or allowed_level < PermissionLevel(requested_level):
+        if not allowed_level or allowed_level < models.PermissionLevel(requested_level):
             logger.warning(
                 f'Request {requested_level} permissions do not match entry {allowed_level} '
                 f'permissions for {permission}',
@@ -144,8 +160,8 @@ def _check_permissions(
     return True
 
 
-def _check_no_org_permissions_with_repositories(
-    token_request: TokenRequest,
+def _check_org_permissions_without_repository_scope(
+    token_request: models.TokenRequest,
 ) -> bool:
     if token_request.requested_repositories and any(
         permission.startswith('organization') for permission in token_request.permissions

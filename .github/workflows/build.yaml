@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: gardener/cc-utils/.github/actions/trusted-checkout@v1
       - name: lint
         run: |
           pip3 install --break-system-packages ruff bandit

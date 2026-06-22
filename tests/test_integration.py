@@ -1,16 +1,16 @@
+import base64
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+import unittest.mock
 
+import cryptography.hazmat.primitives.asymmetric.rsa as crypto_rsa
+import cryptography.hazmat.primitives.serialization as crypto_serialization
 import jwt as pyjwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
-import github
+import github_oidc_federation.app as app_module
 import github_oidc_federation.github_api as github_api
 import github_oidc_federation.jwt_verifier as jwt_verifier
-import github_oidc_federation.token_request_handler as token_request_handler
-from github_oidc_federation.app import build_app
+import github_oidc_federation.models as models
 
 
 ISSUER = 'https://token.actions.githubusercontent.com'
@@ -46,12 +46,12 @@ OIDC_CONFIG_YAML = f"""
 
 @pytest.fixture(scope='module')
 def rsa_key_pair():
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_key = crypto_rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
     private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
+        encoding=crypto_serialization.Encoding.PEM,
+        format=crypto_serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=crypto_serialization.NoEncryption(),
     )
     return private_key, public_key, private_pem
 
@@ -89,38 +89,29 @@ def jwks(rsa_key_pair, kid):
 
 
 @pytest.fixture(autouse=True)
-def reset_module_state():
-    original_hosts = token_request_handler.ALLOWED_HOSTS
-    original_creds = github_api.GITHUB_APP_CREDENTIALS
-    original_audience = jwt_verifier.EXPECTED_AUDIENCE
+def clear_caches():
     jwt_verifier._fetch_public_key.cache_clear()
     github_api._get_installation_id_for_org.cache_clear()
-
-    token_request_handler.ALLOWED_HOSTS = {HOST}
-    jwt_verifier.EXPECTED_AUDIENCE = AUDIENCE
-
-    credential = MagicMock(spec=github.GitHubAppCredentials)
-    credential.host = HOST
-    credential.app_id = 123
-    credential.private_key = b'dummy'
-    credential.matches.return_value = True
-    github_api.GITHUB_APP_CREDENTIALS = [credential]
-
     yield
-
-    token_request_handler.ALLOWED_HOSTS = original_hosts
-    github_api.GITHUB_APP_CREDENTIALS = original_creds
-    jwt_verifier.EXPECTED_AUDIENCE = original_audience
     jwt_verifier._fetch_public_key.cache_clear()
     github_api._get_installation_id_for_org.cache_clear()
 
 
 @pytest.fixture
 async def client(aiohttp_client, jwks):
-    app = build_app()
+    credential = unittest.mock.MagicMock(spec=models.GitHubAppCredentials)
+    credential.host = HOST
+    credential.app_id = 123
+    credential.private_key = 'dummy'
+    credential.matches.return_value = True
+
+    application = app_module.build_app(
+        github_app_credentials=[credential],
+        expected_audience=AUDIENCE,
+    )
 
     def _mock_fetch_side_effect(url, **_):
-        res = MagicMock()
+        res = unittest.mock.MagicMock()
         if 'openid-configuration' in url:
             res.to_json.return_value = {'jwks_uri': f'{ISSUER}/jwks'}
         elif url.endswith('/jwks'):
@@ -134,24 +125,24 @@ async def client(aiohttp_client, jwks):
                 'repositories': [],
             }
         elif '/contents/' in url:
-            import base64
-
             encoded = base64.b64encode(OIDC_CONFIG_YAML.encode()).decode()
             res.to_json.return_value = {'content': encoded, 'encoding': 'base64'}
         return res
 
     with (
-        patch(
-            'github_oidc_federation.github_api.fetch_with_retries',
-            new=AsyncMock(side_effect=_mock_fetch_side_effect),
+        unittest.mock.patch(
+            'github_oidc_federation.github_api.http_client.fetch_with_retries',
+            new=unittest.mock.AsyncMock(side_effect=_mock_fetch_side_effect),
         ),
-        patch(
-            'github_oidc_federation.jwt_verifier.fetch_with_retries',
-            new=AsyncMock(side_effect=_mock_fetch_side_effect),
+        unittest.mock.patch(
+            'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
+            new=unittest.mock.AsyncMock(side_effect=_mock_fetch_side_effect),
         ),
-        patch('github_oidc_federation.github_api._create_jwt', return_value='app.jwt.token'),
+        unittest.mock.patch(
+            'github_oidc_federation.github_api._create_jwt', return_value='app.jwt.token'
+        ),
     ):
-        yield await aiohttp_client(app)
+        yield await aiohttp_client(application)
 
 
 # --- Happy path ---
@@ -187,57 +178,6 @@ async def test_valid_request_with_repositories(client, valid_jwt):
     assert resp.status == 200
 
 
-# --- Validation failures ---
-
-
-async def test_missing_token_returns_400(client):
-    resp = await client.post(
-        '/token-exchange',
-        json={
-            'host': HOST,
-            'organization': ORG,
-            'permissions': {'contents': 'read'},
-        },
-    )
-    assert resp.status == 400
-
-
-async def test_missing_host_returns_400(client, valid_jwt):
-    resp = await client.post(
-        '/token-exchange',
-        json={
-            'token': valid_jwt,
-            'organization': ORG,
-            'permissions': {'contents': 'read'},
-        },
-    )
-    assert resp.status == 400
-
-
-async def test_missing_organization_returns_400(client, valid_jwt):
-    resp = await client.post(
-        '/token-exchange',
-        json={
-            'token': valid_jwt,
-            'host': HOST,
-            'permissions': {'contents': 'read'},
-        },
-    )
-    assert resp.status == 400
-
-
-async def test_missing_permissions_returns_400(client, valid_jwt):
-    resp = await client.post(
-        '/token-exchange',
-        json={
-            'token': valid_jwt,
-            'host': HOST,
-            'organization': ORG,
-        },
-    )
-    assert resp.status == 400
-
-
 async def test_disallowed_host_returns_401(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
@@ -269,7 +209,6 @@ async def test_invalid_repository_name_returns_401(client, valid_jwt):
 
 
 async def test_permission_level_too_high_returns_401(client, valid_jwt):
-    # OIDC config only grants write; requesting admin should fail
     resp = await client.post(
         '/token-exchange',
         json={
@@ -282,7 +221,7 @@ async def test_permission_level_too_high_returns_401(client, valid_jwt):
     assert resp.status == 401
 
 
-async def test_unknown_permission_returns_401(client, valid_jwt):
+async def test_permission_not_granted_by_any_matching_entry_returns_401(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={

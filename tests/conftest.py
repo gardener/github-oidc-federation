@@ -2,7 +2,7 @@ import unittest.mock
 
 import pytest
 
-from github_oidc_federation.models import OidcFederationEntry, PermissionLevel, TokenRequest
+import github_oidc_federation.models as models
 
 
 @pytest.fixture
@@ -14,10 +14,10 @@ def make_entry():
         repositories=None,
         principals=None,
     ):
-        return OidcFederationEntry(
+        return models.OidcFederationEntry(
             issuer=issuer,
             subject=subject,
-            permissions=permissions or {'contents': PermissionLevel.READ},
+            permissions=permissions or {'contents': models.PermissionLevel.READ},
             repositories=repositories,
             principals=principals,
         )
@@ -28,7 +28,7 @@ def make_entry():
 @pytest.fixture
 def make_token_request():
     def _make(
-        jwt='tok',
+        raw_jwt='tok',
         host='github.com',
         organization='my-org',
         permissions=None,
@@ -37,8 +37,8 @@ def make_token_request():
         repo_url='github.com/my-org/.github-oidc',
         credential=None,
     ):
-        return TokenRequest(
-            jwt=jwt,
+        return models.TokenRequest(
+            raw_jwt=raw_jwt,
             host=host,
             organization=organization,
             permissions=permissions or {'contents': 'read'},

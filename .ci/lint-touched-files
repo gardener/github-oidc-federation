@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 # usage: $1: <src-dir>
 
 src_dir="${1:-"$(readlink -f "$(dirname "${0}")/..")"}"
@@ -18,11 +20,7 @@ echo 'running ruff check for touched files from staging area:'
 echo ''
 echo "${touched_files}"
 
-set -e
-
 pushd "${src_dir}"
 echo "${touched_files}" | xargs ruff check
 echo "${touched_files}" | xargs ruff format --check
 popd
-
-exit $?

@@ -2,23 +2,21 @@
 
 import argparse
 import collections.abc
+import logging
 import os
 
 import aiohttp.web
 import dacite
 import yaml
-import logging
-import github
 
-from . import github_api
-from . import http_client
-from . import jwt_verifier
-from . import token_request_handler
+import github_oidc_federation.http_client as http_client
+import github_oidc_federation.models as models
+import github_oidc_federation.token_request_handler as token_request_handler
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s %(message)s')
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--productive', action='store_true', default=False)
@@ -31,7 +29,7 @@ def parse_args():
 
 def iter_github_app_credentials(
     github_app_credentials_path: str,
-) -> collections.abc.Iterable[github.GitHubAppCredentials]:
+) -> collections.abc.Iterable[models.GitHubAppCredentials]:
     for github_app_credential_name in os.listdir(github_app_credentials_path):
         github_app_credential_path = os.path.join(
             github_app_credentials_path,
@@ -44,13 +42,19 @@ def iter_github_app_credentials(
         with open(github_app_credential_path) as f:
             github_app_credential_raw = yaml.safe_load(f)
 
+        # convert list to tuple so it is hashable for cache.
+        if raw_selectors := github_app_credential_raw.get('selectors'):
+            github_app_credential_raw['selectors'] = tuple(
+                models.GitHubAppSelector(**selector) for selector in raw_selectors
+            )
+
         yield dacite.from_dict(
-            data_class=github.GitHubAppCredentials,
+            data_class=models.GitHubAppCredentials,
             data=github_app_credential_raw,
         )
 
 
-def run_app():
+def run_app() -> None:
     parsed_arguments = parse_args()
 
     host = '0.0.0.0' if parsed_arguments.productive else 'localhost'
@@ -62,15 +66,17 @@ def run_app():
         ),
     )
 
-    token_request_handler.ALLOWED_HOSTS = set(c.host for c in github_app_credentials)
-    github_api.GITHUB_APP_CREDENTIALS = github_app_credentials
-    jwt_verifier.EXPECTED_AUDIENCE = parsed_arguments.expected_audience
-
-    app = build_app()
+    app = build_app(
+        github_app_credentials=github_app_credentials,
+        expected_audience=parsed_arguments.expected_audience,
+    )
     aiohttp.web.run_app(app, host=host, port=port)
 
 
-def build_app() -> aiohttp.web.Application:
+def build_app(
+    github_app_credentials: list[models.GitHubAppCredentials],
+    expected_audience: str,
+) -> aiohttp.web.Application:
     async def on_startup(_):
         http_client.SESSION = aiohttp.ClientSession()
 
@@ -78,9 +84,15 @@ def build_app() -> aiohttp.web.Application:
         await http_client.SESSION.close()
 
     app = aiohttp.web.Application()
+    app['allowed_hosts'] = set(c.host for c in github_app_credentials)
+    app['github_app_credentials'] = github_app_credentials
+    app['expected_audience'] = expected_audience
+
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
+
     app.router.add_post('/token-exchange', token_request_handler.request_token)
+
     return app
 
 

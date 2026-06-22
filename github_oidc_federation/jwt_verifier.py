@@ -3,36 +3,33 @@ import logging
 import aiohttp.web
 import jwt
 import jwt.algorithms
-from async_lru import alru_cache
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+import async_lru
 
-from .http_client import fetch_with_retries
+import github_oidc_federation.http_client as http_client
 
 
 logger = logging.getLogger(__name__)
 
-EXPECTED_AUDIENCE: str | None = None
 
-
-def extract_issuer(token: str) -> str:
-    decoded_jwt = jwt.decode(jwt=token, options={'verify_signature': False})
+def extract_issuer(raw_jwt: str) -> str:
+    decoded_jwt = jwt.decode(jwt=raw_jwt, options={'verify_signature': False})
     issuer = decoded_jwt.get('iss')
     if not issuer:
         raise aiohttp.web.HTTPBadRequest(reason='Missing issuer in token')
     return issuer
 
 
-async def verify_jwt(token: str, issuer: str) -> dict:
-    unverified_header = jwt.get_unverified_header(token)
+async def verify_jwt(raw_jwt: str, issuer: str, audience: str) -> dict:
+    unverified_header = jwt.get_unverified_header(raw_jwt)
     kid = unverified_header.get('kid')
     public_key = await _fetch_public_key(issuer, kid)
 
     try:
         claims = jwt.decode(
-            jwt=token,
+            jwt=raw_jwt,
             key=public_key,
             algorithms=['RS256'],
-            audience=EXPECTED_AUDIENCE,
+            audience=audience,
             issuer=issuer,
         )
     except Exception as e:
@@ -45,10 +42,10 @@ async def verify_jwt(token: str, issuer: str) -> dict:
     return claims
 
 
-@alru_cache(maxsize=2048, ttl=60 * 60 * 24)
-async def _fetch_public_key(issuer: str, kid: str) -> RSAPublicKey:
+@async_lru.alru_cache(maxsize=2048, ttl=60 * 60 * 24)  # 24 hours
+async def _fetch_public_key(issuer: str, kid: str):
     try:
-        openid_configuration_response = await fetch_with_retries(
+        openid_configuration_response = await http_client.fetch_with_retries(
             url=f'{issuer}/.well-known/openid-configuration',
         )
     except Exception:
@@ -62,10 +59,10 @@ async def _fetch_public_key(issuer: str, kid: str) -> RSAPublicKey:
         )
 
     try:
-        jwks_res = await fetch_with_retries(url=jwks_uri)
+        jwks_res = await http_client.fetch_with_retries(url=jwks_uri)
     except Exception:
         raise aiohttp.web.HTTPInternalServerError(
-            reason='Failed to fetch issuer openid-configuration',
+            reason='Failed to fetch issuer JWKS',
         )
 
     for jwk in jwks_res.to_json().get('keys', []):

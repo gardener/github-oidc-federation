@@ -2,15 +2,13 @@ import json
 import unittest.mock
 
 import aiohttp.web
+import cryptography.hazmat.primitives.asymmetric.rsa as crypto_rsa
+import cryptography.hazmat.primitives.serialization as crypto_serialization
 import jwt
 import jwt.algorithms
-import jwt as pyjwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 import github_oidc_federation.jwt_verifier as jwt_verifier
-from github_oidc_federation.jwt_verifier import extract_issuer, verify_jwt
 
 
 ISSUER = 'https://token.actions.githubusercontent.com'
@@ -25,22 +23,14 @@ def clear_public_key_cache():
     jwt_verifier._fetch_public_key.cache_clear()
 
 
-@pytest.fixture(autouse=True)
-def set_audience():
-    original = jwt_verifier.EXPECTED_AUDIENCE
-    jwt_verifier.EXPECTED_AUDIENCE = AUDIENCE
-    yield
-    jwt_verifier.EXPECTED_AUDIENCE = original
-
-
 @pytest.fixture(scope='module')
 def rsa_key_pair():
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_key = crypto_rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
     private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
+        encoding=crypto_serialization.Encoding.PEM,
+        format=crypto_serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=crypto_serialization.NoEncryption(),
     )
     return private_key, public_key, private_pem
 
@@ -57,7 +47,7 @@ def _make_token(private_pem: bytes, kid: str, claims_override=None):
         'aud': AUDIENCE,
         **(claims_override or {}),
     }
-    return pyjwt.encode(claims, private_pem, algorithm='RS256', headers={'kid': kid})
+    return jwt.encode(claims, private_pem, algorithm='RS256', headers={'kid': kid})
 
 
 def _make_jwks(public_key, kid: str) -> dict:
@@ -93,13 +83,13 @@ def _mock_fetch(jwks_payload: dict, openid_cfg=_SENTINEL):
 def test_extract_issuer_from_unverified_token(rsa_key_pair, kid):
     _, _, private_pem = rsa_key_pair
     token = _make_token(private_pem, kid)
-    assert extract_issuer(token) == ISSUER
+    assert jwt_verifier.extract_issuer(token) == ISSUER
 
 
 def test_extract_issuer_missing_raises_bad_request():
-    token = pyjwt.encode({'sub': SUBJECT}, 'secret-key-long-enough-for-hmac-256', algorithm='HS256')
+    token = jwt.encode({'sub': SUBJECT}, 'secret-key-long-enough-for-hmac-256', algorithm='HS256')
     with pytest.raises(aiohttp.web.HTTPBadRequest, match='Missing issuer'):
-        extract_issuer(token)
+        jwt_verifier.extract_issuer(token)
 
 
 # --- verify_jwt ---
@@ -111,10 +101,10 @@ async def test_verify_jwt_valid_token_returns_claims(rsa_key_pair, kid):
     jwks = _make_jwks(public_key, kid)
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=_mock_fetch(jwks),
     ):
-        claims = await verify_jwt(token, ISSUER)
+        claims = await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)
 
     assert claims['sub'] == SUBJECT
     assert claims['iss'] == ISSUER
@@ -126,11 +116,11 @@ async def test_verify_jwt_wrong_issuer_raises_unauthorized(rsa_key_pair, kid):
     jwks = _make_jwks(public_key, kid)
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=_mock_fetch(jwks),
     ):
         with pytest.raises(aiohttp.web.HTTPUnauthorized, match='Token verification failed'):
-            await verify_jwt(token, 'https://evil.example.com')
+            await jwt_verifier.verify_jwt(token, 'https://evil.example.com', AUDIENCE)
 
 
 async def test_verify_jwt_unknown_kid_raises_unauthorized(rsa_key_pair, kid):
@@ -139,17 +129,17 @@ async def test_verify_jwt_unknown_kid_raises_unauthorized(rsa_key_pair, kid):
     jwks = _make_jwks(public_key, 'other-kid')
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=_mock_fetch(jwks),
     ):
         with pytest.raises(aiohttp.web.HTTPUnauthorized):
-            await verify_jwt(token, ISSUER)
+            await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)
 
 
 async def test_verify_jwt_missing_sub_claim_raises_bad_request(rsa_key_pair, kid):
     _, public_key, private_pem = rsa_key_pair
     jwks = _make_jwks(public_key, kid)
-    token_no_sub = pyjwt.encode(
+    token_no_sub = jwt.encode(
         {'iss': ISSUER, 'aud': AUDIENCE},
         private_pem,
         algorithm='RS256',
@@ -157,11 +147,11 @@ async def test_verify_jwt_missing_sub_claim_raises_bad_request(rsa_key_pair, kid
     )
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=_mock_fetch(jwks),
     ):
         with pytest.raises(aiohttp.web.HTTPBadRequest, match='Missing sub claim'):
-            await verify_jwt(token_no_sub, ISSUER)
+            await jwt_verifier.verify_jwt(token_no_sub, ISSUER, AUDIENCE)
 
 
 async def test_verify_jwt_missing_jwks_uri_raises_bad_request(rsa_key_pair, kid):
@@ -169,11 +159,11 @@ async def test_verify_jwt_missing_jwks_uri_raises_bad_request(rsa_key_pair, kid)
     token = _make_token(private_pem, kid)
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=_mock_fetch({}, openid_cfg={}),
     ):
         with pytest.raises(aiohttp.web.HTTPBadRequest, match='Missing jwks_uri'):
-            await verify_jwt(token, ISSUER)
+            await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)
 
 
 async def test_verify_jwt_fetch_failure_raises_500(rsa_key_pair, kid):
@@ -181,8 +171,8 @@ async def test_verify_jwt_fetch_failure_raises_500(rsa_key_pair, kid):
     token = _make_token(private_pem, kid)
 
     with unittest.mock.patch(
-        'github_oidc_federation.jwt_verifier.fetch_with_retries',
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
         side_effect=ConnectionError('network error'),
     ):
         with pytest.raises(aiohttp.web.HTTPInternalServerError):
-            await verify_jwt(token, ISSUER)
+            await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)

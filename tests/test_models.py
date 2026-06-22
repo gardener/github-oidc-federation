@@ -1,30 +1,30 @@
 import pytest
 
-from github_oidc_federation.models import OidcFederationEntry, PermissionLevel
+import github_oidc_federation.models as models
 
 
 # --- PermissionLevel ---
 
 
 def test_permission_level_ordering():
-    assert PermissionLevel.READ < PermissionLevel.WRITE
-    assert PermissionLevel.WRITE < PermissionLevel.ADMIN
+    assert models.PermissionLevel.READ < models.PermissionLevel.WRITE
+    assert models.PermissionLevel.WRITE < models.PermissionLevel.ADMIN
 
 
 def test_permission_level_string_value():
-    assert PermissionLevel.READ == 'read'
-    assert PermissionLevel.WRITE == 'write'
-    assert PermissionLevel.ADMIN == 'admin'
+    assert models.PermissionLevel.READ == 'read'
+    assert models.PermissionLevel.WRITE == 'write'
+    assert models.PermissionLevel.ADMIN == 'admin'
 
 
 # --- OidcFederationEntry ---
 
 
 def test_oidc_federation_entry_valid_with_subject_only():
-    entry = OidcFederationEntry(
+    entry = models.OidcFederationEntry(
         issuer='https://example.com',
         subject='repo:org/repo:ref:refs/heads/main',
-        permissions={'contents': PermissionLevel.READ},
+        permissions={'contents': models.PermissionLevel.READ},
         repositories=None,
         principals=None,
     )
@@ -32,10 +32,10 @@ def test_oidc_federation_entry_valid_with_subject_only():
 
 
 def test_oidc_federation_entry_valid_with_principals_only():
-    entry = OidcFederationEntry(
+    entry = models.OidcFederationEntry(
         issuer='https://example.com',
         subject=None,
-        permissions={'contents': PermissionLevel.WRITE},
+        permissions={'contents': models.PermissionLevel.WRITE},
         repositories=['my-repo'],
         principals=[{'repository': 'org/repo'}],
     )
@@ -44,10 +44,10 @@ def test_oidc_federation_entry_valid_with_principals_only():
 
 def test_oidc_federation_entry_neither_subject_nor_principals_raises():
     with pytest.raises(ValueError, match='Either subject or principals must be specified'):
-        OidcFederationEntry(
+        models.OidcFederationEntry(
             issuer='https://example.com',
             subject=None,
-            permissions={'contents': PermissionLevel.READ},
+            permissions={'contents': models.PermissionLevel.READ},
             repositories=None,
             principals=None,
         )
@@ -55,7 +55,7 @@ def test_oidc_federation_entry_neither_subject_nor_principals_raises():
 
 def test_oidc_federation_entry_none_permission_value_raises():
     with pytest.raises(ValueError, match='Permission levels must not be None'):
-        OidcFederationEntry(
+        models.OidcFederationEntry(
             issuer='https://example.com',
             subject='repo:org/repo:ref:refs/heads/main',
             permissions={'contents': None},
@@ -65,7 +65,7 @@ def test_oidc_federation_entry_none_permission_value_raises():
 
 
 def test_oidc_federation_entry_empty_permissions_allowed():
-    entry = OidcFederationEntry(
+    entry = models.OidcFederationEntry(
         issuer='https://example.com',
         subject='repo:org/repo:ref:refs/heads/main',
         permissions={},

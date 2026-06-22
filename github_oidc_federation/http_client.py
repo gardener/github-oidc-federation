@@ -11,19 +11,21 @@ SESSION: aiohttp.ClientSession | None = None
 
 async def fetch_with_retries(
     url: str,
-    json: dict | None = None,
+    json_body: dict | None = None,
     data: dict | None = None,
     headers: dict | None = None,
     retries: int = 3,
 ) -> '_Response':
-    method = 'POST' if (json or data) else 'GET'
+    if SESSION is None:
+        raise RuntimeError('http_client.SESSION not initialised')
+    method = 'POST' if (json_body is not None or data is not None) else 'GET'
     last_exc: Exception | None = None
     for attempt in range(retries + 1):
         try:
             async with SESSION.request(
                 method=method,
                 url=url,
-                json=json,
+                json=json_body,
                 data=data,
                 headers=headers,
             ) as response:
@@ -39,8 +41,7 @@ async def fetch_with_retries(
                     status=response.status,
                     message=response.reason,
                 )
-        except aiohttp.ClientResponseError:
-            raise
+                continue
         except Exception as e:
             logger.warning(f'rq against {url=} failed: {e}')
             last_exc = e
