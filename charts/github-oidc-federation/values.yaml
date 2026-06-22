@@ -1,10 +1,12 @@
 image:
   repository: europe-docker.pkg.dev/gardener-project/releases/github-oidc-federation
   tag: latest
-ingress:
+gateway:
+  className: ""
+httpRoute:
   annotations: {}
-  class: nginx
   hosts: []
 networkPolicy:
-  ingressController:
+  gatewayController:
     enabled: true
+    namespace: envoy-gateway-system
