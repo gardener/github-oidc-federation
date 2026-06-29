@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# usage: $1: <src-dir>
+
+src_dir="${1:-"$(readlink -f "$(dirname "${0}")/..")"}"
+
+touched_files=$(
+    GIT_DIR="${src_dir}/.git" \
+    git diff --cached --name-only --diff-filter=ACM | grep -e '.*\.py$' || true
+)
+
+if [ -z "${touched_files}" ]; then
+    echo 'no python files were touched - early-exiting'
+    exit 0
+fi
+
+echo 'running ruff check for touched files from staging area:'
+echo ''
+echo "${touched_files}"
+
+pushd "${src_dir}"
+echo "${touched_files}" | xargs ruff check
+echo "${touched_files}" | xargs ruff format --check
+popd

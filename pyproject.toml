@@ -1,4 +1,79 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "github-oidc-federation"
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp",
+    "async-lru",
+    "cryptography",
+    "dacite",
+    "pyjwt",
+    "pyyaml",
+]
+
+[project.scripts]
+github-oidc-federation = "github_oidc_federation.app:run_app"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["github_oidc_federation*"]
+
+[tool.ruff]
+line-length = 101 # be consistent with cc-utils
+
+[tool.ruff.format]
+quote-style = 'single'
+indent-style = 'space'
+docstring-code-format = true
+line-ending = 'lf'
+skip-magic-trailing-comma = false # allow one parameter per line
+
+[tool.ruff.lint]
+preview = true
+select = [
+  'COM812',
+  'E101',
+  'E117',
+  'E201',
+  'E202',
+  'E203',
+  'E225',
+  'E251',
+  'E3',
+  'E4',
+  'E5',
+  'E701',
+  'E703',
+  'E711',
+  'E713',
+  'E714',
+  'E721',
+  'E741',
+  'E9',
+  'W1',
+  'W2',
+  'W3',
+  'W6',
+  'F',
+]
+
+ignore = ['COM812', 'F722', 'F821']
+
+[tool.pytest.ini_options]
+asyncio_mode = 'auto'
+filterwarnings = [
+    'ignore::async_lru.AlruCacheLoopResetWarning',
+]
+
 [tool.bandit]
+exclude_dirs = ['tests', '.venv']
 skips = [
-  'B104', # we intendedly bind to `0.0.0.0` in productive environments only
+  'B104', # we intendedly bind to `0.0.0.0` in productive environments only (app.py)
 ]

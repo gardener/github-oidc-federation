@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_dir=$(readlink -f "$(dirname "$0")/../..")
+
+${repo_dir}/.ci/lint-touched-files
