@@ -52,13 +52,26 @@ def find_matching_entry(
     token_request: models.TokenRequest,
     oidc_federation_config: list[models.OidcFederationEntry],
     claims: dict,
+    is_authorized: collections.abc.Callable[
+        ['models.TokenRequest', 'models.OidcFederationEntry'], bool
+    ],
 ) -> models.OidcFederationEntry:
+    claims_matched = False
     for entry in oidc_federation_config:
         if entry.issuer == token_request.issuer and _entry_matches_claims(entry, claims):
-            return entry
+            claims_matched = True
+            if is_authorized(token_request, entry):
+                return entry
+    if claims_matched:
+        raise aiohttp.web.HTTPUnauthorized(
+            reason=(
+                'The requested scope and/or permissions are not granted in the oidc-federation '
+                f'cfg in "{token_request.repo_url}". Access not allowed'
+            ),
+        )
     raise aiohttp.web.HTTPUnauthorized(
         reason=(
-            f'No entry found in the oidc-federation cfg in "{token_request.repo_url}". '
+            f'No matching entry found in the oidc-federation cfg in "{token_request.repo_url}". '
             'Access not allowed'
         ),
     )
