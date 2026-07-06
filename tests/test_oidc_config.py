@@ -125,11 +125,13 @@ def test_entry_matches_claims_principals_one_of_multiple_matches():
 
 # --- find_matching_entry ---
 
+_always_authorized = lambda req, entry: True  # noqa: E731
+
 
 def test_find_matching_entry_finds_match(make_token_request):
     req = make_token_request(issuer=ISSUER)
     entry = _create_entry(subject=SUBJECT)
-    result = oidc_config.find_matching_entry(req, [entry], {'sub': SUBJECT})
+    result = oidc_config.find_matching_entry(req, [entry], {'sub': SUBJECT}, _always_authorized)
     assert result is entry
 
 
@@ -137,7 +139,9 @@ def test_find_matching_entry_skips_wrong_issuer(make_token_request):
     req = make_token_request(issuer=ISSUER)
     wrong_issuer_entry = _create_entry(issuer='https://other.example.com')
     matching = _create_entry(issuer=ISSUER, subject=SUBJECT)
-    result = oidc_config.find_matching_entry(req, [wrong_issuer_entry, matching], {'sub': SUBJECT})
+    result = oidc_config.find_matching_entry(
+        req, [wrong_issuer_entry, matching], {'sub': SUBJECT}, _always_authorized
+    )
     assert result is matching
 
 
@@ -145,10 +149,26 @@ def test_find_matching_entry_no_match_raises_http_401(make_token_request):
     req = make_token_request(issuer=ISSUER)
     entry = _create_entry(subject='repo:other/repo:ref:refs/heads/main')
     with pytest.raises(aiohttp.web.HTTPUnauthorized):
-        oidc_config.find_matching_entry(req, [entry], {'sub': SUBJECT})
+        oidc_config.find_matching_entry(req, [entry], {'sub': SUBJECT}, _always_authorized)
 
 
 def test_find_matching_entry_empty_config_raises_http_401(make_token_request):
     req = make_token_request(issuer=ISSUER)
     with pytest.raises(aiohttp.web.HTTPUnauthorized):
-        oidc_config.find_matching_entry(req, [], {'sub': SUBJECT})
+        oidc_config.find_matching_entry(req, [], {'sub': SUBJECT}, _always_authorized)
+
+
+def test_find_matching_entry_skips_unauthorized_entry(make_token_request):
+    # mirrors the real-world scenario: same principal in two entries with different repositories;
+    # the request targets repos from the second entry, so the first must be skipped
+    req = make_token_request(issuer=ISSUER, requested_repositories=['repo-b'])
+    entry_a = _create_entry(subject=SUBJECT, repositories=['repo-a'])
+    entry_b = _create_entry(subject=SUBJECT, repositories=['repo-b'])
+
+    def is_authorized(r, e):
+        return e.repositories and all(repo in e.repositories for repo in r.requested_repositories)
+
+    result = oidc_config.find_matching_entry(
+        req, [entry_a, entry_b], {'sub': SUBJECT}, is_authorized
+    )
+    assert result is entry_b

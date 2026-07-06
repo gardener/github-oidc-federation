@@ -27,16 +27,9 @@ async def request_token(request: aiohttp.web.Request) -> aiohttp.web.Response:
 
     claims = await jwt_verifier.verify_jwt(token_request.raw_jwt, token_request.issuer, audience)
 
-    oidc_federation_config_entry = oidc_config.find_matching_entry(
-        token_request, oidc_federation_config, claims
+    oidc_config.find_matching_entry(
+        token_request, oidc_federation_config, claims, _is_request_authorized
     )
-    if not _is_request_authorized(token_request, oidc_federation_config_entry):
-        raise aiohttp.web.HTTPUnauthorized(
-            reason=(
-                'The requested scope and/or permissions are not granted in the oidc-federation '
-                f'cfg in "{token_request.repo_url}". Access not allowed'
-            ),
-        )
 
     result = await github_api.fetch_installation_token(token_request, claims['sub'])
     return aiohttp.web.json_response(result)
