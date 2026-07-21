@@ -2,6 +2,12 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: {{ .Release.Name }}
+  {{- if default dict (.Values.gateway).annotations }}
+  annotations:
+    {{- range $annotation, $value := .Values.gateway.annotations }}
+    {{ $annotation }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
 spec:
   gatewayClassName: {{ required "gateway.className is required" .Values.gateway.className }}
   listeners:
@@ -17,12 +23,6 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: github-oidc-federation
-  {{- if default dict (.Values.httpRoute).annotations }}
-  annotations:
-    {{- range $annotation, $value := .Values.httpRoute.annotations }}
-    {{ $annotation }}: {{ $value }}
-    {{- end }}
-  {{- end }}
 spec:
   parentRefs:
     - name: {{ .Release.Name }}
