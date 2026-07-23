@@ -1,3 +1,30 @@
+# EnvoyProxy customizes the proxy deployment that Envoy Gateway creates automatically for the
+# Gateway. It is referenced via spec.infrastructure.parametersRef and configures 2 replicas
+# spread across availability zones for high availability.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 2
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  topologySpreadConstraints:
+                    - maxSkew: 1
+                      topologyKey: topology.kubernetes.io/zone
+                      whenUnsatisfiable: ScheduleAnyway
+                      labelSelector:
+                        matchLabels:
+                          gateway.envoyproxy.io/owning-gateway-name: {{ .Release.Name }}
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -10,6 +37,11 @@ metadata:
   {{- end }}
 spec:
   gatewayClassName: {{ required "gateway.className is required" .Values.gateway.className }}
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: {{ .Release.Name }}
   listeners:
     - name: https
       protocol: HTTPS
