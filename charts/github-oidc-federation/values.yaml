@@ -4,6 +4,7 @@ image:
 gateway:
   className: ""
   annotations: {}
+  proxyImage: {}  # optional: repository and tag to override the default envoy proxy image
 httpRoute:
   hosts: []
 networkPolicy:

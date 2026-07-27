@@ -11,6 +11,12 @@ spec:
     kubernetes:
       envoyDeployment:
         replicas: 2
+        {{- if (.Values.gateway).proxyImage }}
+        container:
+          image:
+            repository: {{ .Values.gateway.proxyImage.repository }}
+            tag: {{ .Values.gateway.proxyImage.tag }}
+        {{- end }}
         patch:
           type: StrategicMerge
           value:
