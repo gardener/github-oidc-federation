@@ -11,6 +11,7 @@ import github_oidc_federation.app as app_module
 import github_oidc_federation.github_api as github_api
 import github_oidc_federation.jwt_verifier as jwt_verifier
 import github_oidc_federation.models as models
+import github_oidc_federation.oidc_config as oidc_config
 
 
 ISSUER = 'https://token.actions.githubusercontent.com'
@@ -92,9 +93,11 @@ def jwks(rsa_key_pair, kid):
 def clear_caches():
     jwt_verifier._fetch_public_key.cache_clear()
     github_api._get_installation_id_for_org.cache_clear()
+    oidc_config.clear_config_cache()
     yield
     jwt_verifier._fetch_public_key.cache_clear()
     github_api._get_installation_id_for_org.cache_clear()
+    oidc_config.clear_config_cache()
 
 
 @pytest.fixture
@@ -272,3 +275,19 @@ async def test_org_permission_with_repositories_returns_403(client, valid_jwt):
         },
     )
     assert resp.status == 403
+
+
+# --- Cache invalidation ---
+
+
+async def test_invalidate_cache_returns_204(client, valid_jwt):
+    resp = await client.post(
+        '/invalidate-cache',
+        headers={'Authorization': f'Bearer {valid_jwt}'},
+    )
+    assert resp.status == 204
+
+
+async def test_invalidate_cache_missing_token_returns_401(client):
+    resp = await client.post('/invalidate-cache')
+    assert resp.status == 401

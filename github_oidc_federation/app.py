@@ -9,6 +9,7 @@ import aiohttp.web
 import dacite
 import yaml
 
+import github_oidc_federation.cache_invalidation_handler as cache_invalidation_handler
 import github_oidc_federation.http_client as http_client
 import github_oidc_federation.models as models
 import github_oidc_federation.token_request_handler as token_request_handler
@@ -92,6 +93,7 @@ def build_app(
     app.on_cleanup.append(on_cleanup)
 
     app.router.add_post('/token-exchange', token_request_handler.request_token)
+    app.router.add_post('/invalidate-cache', cache_invalidation_handler.invalidate_cache)
 
     return app
 
