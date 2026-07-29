@@ -53,19 +53,24 @@ async def test_get_on_no_body(mock_session):
         json=None,
         data=None,
         headers=None,
+        timeout=None,
     )
     assert result.to_json() == {'key': 'value'}
 
 
 async def test_post_when_json_body_provided(mock_session):
     mock_session.request.return_value = _ok_cm()
-    await http_client.fetch_with_retries(url='https://example.com/token', json_body={'foo': 'bar'})
+    await http_client.fetch_with_retries(
+        url='https://example.com/token', method='POST', json_body={'foo': 'bar'}
+    )
     assert mock_session.request.call_args.kwargs['method'] == 'POST'
 
 
 async def test_post_when_data_body_provided(mock_session):
     mock_session.request.return_value = _ok_cm()
-    await http_client.fetch_with_retries(url='https://example.com/token', data={'foo': 'bar'})
+    await http_client.fetch_with_retries(
+        url='https://example.com/token', method='POST', data={'foo': 'bar'}
+    )
     assert mock_session.request.call_args.kwargs['method'] == 'POST'
 
 

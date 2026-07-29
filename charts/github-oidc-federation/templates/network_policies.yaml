@@ -46,3 +46,13 @@ spec:
             matchLabels:
               app.kubernetes.io/component: controller
       {{- end }}
+    - ports:
+        - protocol: TCP
+          port: 3000
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              role: github-oidc-federation

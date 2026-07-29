@@ -280,14 +280,6 @@ async def test_org_permission_with_repositories_returns_403(client, valid_jwt):
 # --- Cache invalidation ---
 
 
-async def test_invalidate_cache_returns_204(client, valid_jwt):
-    resp = await client.post(
-        '/invalidate-cache',
-        headers={'Authorization': f'Bearer {valid_jwt}'},
-    )
-    assert resp.status == 204
-
-
-async def test_invalidate_cache_missing_token_returns_401(client):
+async def test_invalidate_cache_returns_204(client):
     resp = await client.post('/invalidate-cache')
-    assert resp.status == 401
+    assert resp.status == 204
