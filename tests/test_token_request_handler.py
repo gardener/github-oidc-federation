@@ -37,7 +37,7 @@ def test_validate_request_missing_host_raises():
 
 
 def test_validate_request_disallowed_host_raises():
-    with pytest.raises(aiohttp.web.HTTPUnauthorized, match='not supported'):
+    with pytest.raises(aiohttp.web.HTTPForbidden, match='not supported'):
         token_request_handler._validate_request(
             'tok', 'evil.example.com', 'org', {'contents': 'read'}, None, ALLOWED_HOSTS
         )
@@ -72,7 +72,7 @@ def test_validate_request_repositories_not_list_raises():
 
 
 def test_validate_request_repository_with_invalid_chars_raises():
-    with pytest.raises(aiohttp.web.HTTPUnauthorized, match='not supported'):
+    with pytest.raises(aiohttp.web.HTTPBadRequest, match='not supported'):
         token_request_handler._validate_request(
             'tok', 'github.com', 'org', {'contents': 'read'}, ['../evil'], ALLOWED_HOSTS
         )

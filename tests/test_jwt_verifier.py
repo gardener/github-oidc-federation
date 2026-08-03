@@ -1,4 +1,5 @@
 import json
+import time
 import unittest.mock
 
 import aiohttp.web
@@ -175,4 +176,31 @@ async def test_verify_jwt_fetch_failure_raises_500(rsa_key_pair, kid):
         side_effect=ConnectionError('network error'),
     ):
         with pytest.raises(aiohttp.web.HTTPInternalServerError):
+            await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)
+
+
+async def test_verify_jwt_future_iat_within_leeway_passes(rsa_key_pair, kid):
+    _, public_key, private_pem = rsa_key_pair
+    jwks = _make_jwks(public_key, kid)
+    token = _make_token(private_pem, kid, claims_override={'iat': int(time.time()) + 5})
+
+    with unittest.mock.patch(
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
+        side_effect=_mock_fetch(jwks),
+    ):
+        claims = await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)
+
+    assert claims['sub'] == SUBJECT
+
+
+async def test_verify_jwt_future_iat_beyond_leeway_raises_unauthorized(rsa_key_pair, kid):
+    _, public_key, private_pem = rsa_key_pair
+    jwks = _make_jwks(public_key, kid)
+    token = _make_token(private_pem, kid, claims_override={'iat': int(time.time()) + 60})
+
+    with unittest.mock.patch(
+        'github_oidc_federation.jwt_verifier.http_client.fetch_with_retries',
+        side_effect=_mock_fetch(jwks),
+    ):
+        with pytest.raises(aiohttp.web.HTTPUnauthorized):
             await jwt_verifier.verify_jwt(token, ISSUER, AUDIENCE)

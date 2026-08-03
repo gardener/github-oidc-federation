@@ -30,7 +30,7 @@ async def retrieve_oidc_federation_config(
 
     allowed_issuers = {entry.issuer for entry in oidc_federation_config}
     if token_request.issuer not in allowed_issuers:
-        raise aiohttp.web.HTTPUnauthorized(
+        raise aiohttp.web.HTTPForbidden(
             reason=f'The issuer {token_request.issuer} is not supported',
         )
 
@@ -63,13 +63,13 @@ def find_matching_entry(
             if is_authorized(token_request, entry):
                 return entry
     if claims_matched:
-        raise aiohttp.web.HTTPUnauthorized(
+        raise aiohttp.web.HTTPForbidden(
             reason=(
                 'The requested scope and/or permissions are not granted in the oidc-federation '
                 f'cfg in "{token_request.repo_url}". Access not allowed'
             ),
         )
-    raise aiohttp.web.HTTPUnauthorized(
+    raise aiohttp.web.HTTPForbidden(
         reason=(
             f'No matching entry found in the oidc-federation cfg in "{token_request.repo_url}". '
             'Access not allowed'
