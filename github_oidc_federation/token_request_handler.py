@@ -54,7 +54,7 @@ def _resolve_request(
 
     credential = github_api.find_credential(repo_url, credentials)
     if credential is None:
-        raise aiohttp.web.HTTPUnauthorized(
+        raise aiohttp.web.HTTPForbidden(
             reason=f'The host {host} and org {organization} are not supported',
         )
 
@@ -85,7 +85,7 @@ def _validate_request(
         raise aiohttp.web.HTTPBadRequest(reason='Missing host property')
 
     if host not in allowed_hosts:
-        raise aiohttp.web.HTTPUnauthorized(reason=f'The host {host} is not supported')
+        raise aiohttp.web.HTTPForbidden(reason=f'The host {host} is not supported')
 
     if not organization:
         raise aiohttp.web.HTTPBadRequest(reason='Missing organization property')
@@ -101,7 +101,7 @@ def _validate_request(
         )
 
     if repositories and any(not _REPOSITORY_PATTERN.fullmatch(r) for r in repositories):
-        raise aiohttp.web.HTTPUnauthorized(
+        raise aiohttp.web.HTTPBadRequest(
             reason=f'The repositories {repositories} are not supported',
         )
 

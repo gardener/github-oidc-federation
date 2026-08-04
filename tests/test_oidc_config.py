@@ -145,16 +145,16 @@ def test_find_matching_entry_skips_wrong_issuer(make_token_request):
     assert result is matching
 
 
-def test_find_matching_entry_no_match_raises_http_401(make_token_request):
+def test_find_matching_entry_no_match_raises_http_403(make_token_request):
     req = make_token_request(issuer=ISSUER)
     entry = _create_entry(subject='repo:other/repo:ref:refs/heads/main')
-    with pytest.raises(aiohttp.web.HTTPUnauthorized):
+    with pytest.raises(aiohttp.web.HTTPForbidden):
         oidc_config.find_matching_entry(req, [entry], {'sub': SUBJECT}, _always_authorized)
 
 
-def test_find_matching_entry_empty_config_raises_http_401(make_token_request):
+def test_find_matching_entry_empty_config_raises_http_403(make_token_request):
     req = make_token_request(issuer=ISSUER)
-    with pytest.raises(aiohttp.web.HTTPUnauthorized):
+    with pytest.raises(aiohttp.web.HTTPForbidden):
         oidc_config.find_matching_entry(req, [], {'sub': SUBJECT}, _always_authorized)
 
 

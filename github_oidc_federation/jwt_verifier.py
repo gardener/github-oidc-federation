@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import aiohttp.web
@@ -31,6 +32,7 @@ async def verify_jwt(raw_jwt: str, issuer: str, audience: str) -> dict:
             algorithms=['RS256'],
             audience=audience,
             issuer=issuer,
+            leeway=datetime.timedelta(seconds=10),
         )
     except Exception as e:
         logger.error(e)

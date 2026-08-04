@@ -178,7 +178,33 @@ async def test_valid_request_with_repositories(client, valid_jwt):
     assert resp.status == 200
 
 
-async def test_disallowed_host_returns_401(client, valid_jwt):
+async def test_invalid_jwt_returns_401(client, rsa_key_pair, kid):
+    _, _, private_pem = rsa_key_pair
+    expired_jwt = pyjwt.encode(
+        {
+            'iss': ISSUER,
+            'sub': SUBJECT,
+            'aud': AUDIENCE,
+            'exp': 1,  # expired in 1970
+        },
+        private_pem,
+        algorithm='RS256',
+        headers={'kid': kid},
+    )
+    resp = await client.post(
+        '/token-exchange',
+        json={
+            'token': expired_jwt,
+            'host': HOST,
+            'organization': ORG,
+            'permissions': {'contents': 'read'},
+            'repositories': ['my-repo'],
+        },
+    )
+    assert resp.status == 401
+
+
+async def test_disallowed_host_returns_403(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={
@@ -188,10 +214,10 @@ async def test_disallowed_host_returns_401(client, valid_jwt):
             'permissions': {'contents': 'read'},
         },
     )
-    assert resp.status == 401
+    assert resp.status == 403
 
 
-async def test_invalid_repository_name_returns_401(client, valid_jwt):
+async def test_invalid_repository_name_returns_400(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={
@@ -202,13 +228,13 @@ async def test_invalid_repository_name_returns_401(client, valid_jwt):
             'repositories': ['../evil'],
         },
     )
-    assert resp.status == 401
+    assert resp.status == 400
 
 
 # --- Authorization failures ---
 
 
-async def test_permission_level_too_high_returns_401(client, valid_jwt):
+async def test_permission_level_too_high_returns_403(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={
@@ -218,10 +244,10 @@ async def test_permission_level_too_high_returns_401(client, valid_jwt):
             'permissions': {'contents': 'admin'},
         },
     )
-    assert resp.status == 401
+    assert resp.status == 403
 
 
-async def test_permission_not_granted_by_any_matching_entry_returns_401(client, valid_jwt):
+async def test_permission_not_granted_by_any_matching_entry_returns_403(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={
@@ -231,10 +257,10 @@ async def test_permission_not_granted_by_any_matching_entry_returns_401(client, 
             'permissions': {'actions': 'read'},
         },
     )
-    assert resp.status == 401
+    assert resp.status == 403
 
 
-async def test_org_permission_with_repositories_returns_401(client, valid_jwt):
+async def test_org_permission_with_repositories_returns_403(client, valid_jwt):
     resp = await client.post(
         '/token-exchange',
         json={
@@ -245,4 +271,4 @@ async def test_org_permission_with_repositories_returns_401(client, valid_jwt):
             'repositories': ['my-repo'],
         },
     )
-    assert resp.status == 401
+    assert resp.status == 403
