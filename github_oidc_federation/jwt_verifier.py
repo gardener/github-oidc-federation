@@ -49,6 +49,7 @@ async def _fetch_public_key(issuer: str, kid: str):
     try:
         openid_configuration_response = await http_client.fetch_with_retries(
             url=f'{issuer}/.well-known/openid-configuration',
+            method='GET',
         )
     except Exception:
         raise aiohttp.web.HTTPInternalServerError(
@@ -61,7 +62,7 @@ async def _fetch_public_key(issuer: str, kid: str):
         )
 
     try:
-        jwks_res = await http_client.fetch_with_retries(url=jwks_uri)
+        jwks_res = await http_client.fetch_with_retries(url=jwks_uri, method='GET')
     except Exception:
         raise aiohttp.web.HTTPInternalServerError(
             reason='Failed to fetch issuer JWKS',

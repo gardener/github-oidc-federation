@@ -12,6 +12,7 @@ spec:
       labels:
         role: github-oidc-federation
     spec:
+      serviceAccountName: github-oidc-federation
       containers:
         - name: github-oidc-federation
           image: {{ include "image" .Values.image }}
@@ -19,6 +20,11 @@ spec:
             - --productive
           securityContext:
             allowPrivilegeEscalation: false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           resources:
             requests:
               memory: 256Mi

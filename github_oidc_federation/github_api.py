@@ -38,6 +38,7 @@ async def fetch_installation_token(token_request: models.TokenRequest, sub: str)
 
     token_res = await http_client.fetch_with_retries(
         url=f'{_get_api_url(token_request.host)}/app/installations/{installation_id}/access_tokens',
+        method='POST',
         headers={
             'Authorization': f'Bearer {jwt_token}',
             'Accept': 'application/vnd.github+json',
@@ -74,6 +75,7 @@ async def _get_installation_id_for_org(
     try:
         res = await http_client.fetch_with_retries(
             url=f'{_get_api_url(host)}/orgs/{org}/installation',
+            method='GET',
             headers={
                 'Authorization': f'Bearer {jwt_token}',
                 'Accept': 'application/vnd.github+json',
@@ -108,6 +110,7 @@ async def fetch_raw_oidc_config(
     try:
         contents_response = await http_client.fetch_with_retries(
             url=f'{_get_api_url(host)}/repos/{org}/{repo_name}/contents/oidc-federation.yaml',
+            method='GET',
             headers={
                 'Authorization': f'Bearer {installation_token}',
                 'Accept': 'application/vnd.github+json',
@@ -131,6 +134,7 @@ async def _get_app_installation_token(host: str, jwt_token: str, installation_id
     try:
         token_response = await http_client.fetch_with_retries(
             url=f'{_get_api_url(host)}/app/installations/{installation_id}/access_tokens',
+            method='POST',
             headers={
                 'Authorization': f'Bearer {jwt_token}',
                 'Accept': 'application/vnd.github+json',

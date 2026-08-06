@@ -48,6 +48,10 @@ async def _fetch_and_parse_oidc_config(
     return _parse_raw_oidc_config(raw)
 
 
+def clear_config_cache() -> None:
+    _fetch_and_parse_oidc_config.cache_clear()
+
+
 def find_matching_entry(
     token_request: models.TokenRequest,
     oidc_federation_config: list[models.OidcFederationEntry],

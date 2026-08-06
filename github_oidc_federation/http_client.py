@@ -11,15 +11,17 @@ SESSION: aiohttp.ClientSession | None = None
 
 async def fetch_with_retries(
     url: str,
+    method: str = 'GET',
     json_body: dict | None = None,
     data: dict | None = None,
     headers: dict | None = None,
     retries: int = 3,
+    timeout: float | None = None,
 ) -> '_Response':
     if SESSION is None:
         raise RuntimeError('http_client.SESSION not initialised')
-    method = 'POST' if (json_body is not None or data is not None) else 'GET'
     last_exc: Exception | None = None
+    client_timeout = aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
     for attempt in range(retries + 1):
         try:
             async with SESSION.request(
@@ -28,6 +30,7 @@ async def fetch_with_retries(
                 json=json_body,
                 data=data,
                 headers=headers,
+                timeout=client_timeout,
             ) as response:
                 if response.ok:
                     body = await response.read()

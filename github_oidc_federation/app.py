@@ -9,11 +9,14 @@ import aiohttp.web
 import dacite
 import yaml
 
+import github_oidc_federation.cache_invalidation_handler as cache_invalidation_handler
 import github_oidc_federation.http_client as http_client
 import github_oidc_federation.models as models
 import github_oidc_federation.token_request_handler as token_request_handler
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s %(message)s')
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,9 +69,21 @@ def run_app() -> None:
         ),
     )
 
+    k8s_sa_token = None
+    k8s_namespace = None
+    try:
+        with open(cache_invalidation_handler.K8S_SA_TOKEN_PATH) as f:
+            k8s_sa_token = f.read()
+        with open(cache_invalidation_handler.K8S_SA_NAMESPACE_PATH) as f:
+            k8s_namespace = f.read()
+    except OSError:
+        logger.warning('K8s service account files not found — cache broadcast disabled')
+
     app = build_app(
         github_app_credentials=github_app_credentials,
         expected_audience=parsed_arguments.expected_audience,
+        k8s_sa_token=k8s_sa_token,
+        k8s_namespace=k8s_namespace,
     )
     aiohttp.web.run_app(app, host=host, port=port)
 
@@ -76,6 +91,8 @@ def run_app() -> None:
 def build_app(
     github_app_credentials: list[models.GitHubAppCredentials],
     expected_audience: str,
+    k8s_sa_token: str | None = None,
+    k8s_namespace: str | None = None,
 ) -> aiohttp.web.Application:
     async def on_startup(_):
         http_client.SESSION = aiohttp.ClientSession()
@@ -87,11 +104,14 @@ def build_app(
     app['allowed_hosts'] = set(c.host for c in github_app_credentials)
     app['github_app_credentials'] = github_app_credentials
     app['expected_audience'] = expected_audience
+    app['k8s_sa_token'] = k8s_sa_token
+    app['k8s_namespace'] = k8s_namespace
 
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
 
     app.router.add_post('/token-exchange', token_request_handler.request_token)
+    app.router.add_post('/invalidate-cache', cache_invalidation_handler.invalidate_cache)
 
     return app
 
