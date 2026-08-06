@@ -11,6 +11,8 @@ import github_oidc_federation.oidc_config as oidc_config
 
 logger = logging.getLogger(__name__)
 
+_OIDC_CONFIG_FILENAME = 'oidc-federation.yaml'
+
 _K8S_SA_BASE_PATH = '/var/run/secrets/kubernetes.io/serviceaccount'
 K8S_SA_TOKEN_PATH = f'{_K8S_SA_BASE_PATH}/token'
 K8S_SA_NAMESPACE_PATH = f'{_K8S_SA_BASE_PATH}/namespace'
@@ -60,8 +62,24 @@ async def _broadcast_to_siblings(namespace: str, sa_token: str) -> None:
     await asyncio.gather(*(_invalidate_sibling(ip) for ip in ips))
 
 
+def _push_affects_oidc_config(payload: dict) -> bool:
+    for commit in payload.get('commits', []):
+        changed = commit.get('added', []) + commit.get('modified', []) + commit.get('removed', [])
+        if any(_OIDC_CONFIG_FILENAME in f for f in changed):
+            return True
+    return False
+
+
 async def invalidate_cache(request: aiohttp.web.Request) -> aiohttp.web.Response:
     is_internal = request.headers.get('X-Internal-Broadcast') == 'true'
+
+    if not is_internal and request.content_length:
+        try:
+            payload = await request.json()
+            if not _push_affects_oidc_config(payload):
+                return aiohttp.web.Response(status=204)
+        except Exception:
+            logger.exception('Failed to parse webhook payload — proceeding with cache invalidation')
 
     if not is_internal:
         sa_token: str | None = request.app['k8s_sa_token']
