@@ -6,5 +6,5 @@ SPDX-PackageDownloadLocation = "https://github.com/gardener/github-oidc-federati
 [[annotations]]
 path = "**"
 precedence = "aggregate"
-SPDX-FileCopyrightText = "Copyright Contributors to the Gardener project"
+SPDX-FileCopyrightText = "Contributors to the Gardener project"
 SPDX-License-Identifier = "Apache-2.0"
