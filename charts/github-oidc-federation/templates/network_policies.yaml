@@ -37,14 +37,15 @@ spec:
     - ports:
         - protocol: TCP
           port: 3000
-      {{- if .Values.networkPolicy.ingressController.enabled }}
+      {{- if .Values.networkPolicy.gatewayController.enabled }}
       from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: nginx-ingress
+              kubernetes.io/metadata.name: {{ required "networkPolicy.gatewayController.namespace is required" .Values.networkPolicy.gatewayController.namespace }}
           podSelector:
             matchLabels:
-              app.kubernetes.io/component: controller
+              gateway.envoyproxy.io/owning-gateway-name: {{ .Release.Name }}
+              gateway.envoyproxy.io/owning-gateway-namespace: {{ .Release.Namespace }}
       {{- end }}
     - ports:
         - protocol: TCP

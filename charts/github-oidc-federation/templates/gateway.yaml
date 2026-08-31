@@ -1,0 +1,79 @@
+# EnvoyProxy customizes the proxy deployment that Envoy Gateway creates automatically for the
+# Gateway. It is referenced via spec.infrastructure.parametersRef and configures 2 replicas
+# spread across availability zones for high availability.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 2
+        {{- if (.Values.gateway).proxyImage }}
+        container:
+          image: {{ .Values.gateway.proxyImage.repository }}:{{ .Values.gateway.proxyImage.tag }}
+        {{- end }}
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  topologySpreadConstraints:
+                    - maxSkew: 1
+                      topologyKey: topology.kubernetes.io/zone
+                      whenUnsatisfiable: ScheduleAnyway
+                      labelSelector:
+                        matchLabels:
+                          gateway.envoyproxy.io/owning-gateway-name: {{ .Release.Name }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Release.Name }}
+  {{- if default dict (.Values.gateway).annotations }}
+  annotations:
+    {{- range $annotation, $value := .Values.gateway.annotations }}
+    {{ $annotation }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ required "gateway.className is required" .Values.gateway.className }}
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: {{ .Release.Name }}
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: github-oidc-federation-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: github-oidc-federation
+spec:
+  parentRefs:
+    - name: {{ .Release.Name }}
+      namespace: {{ .Release.Namespace }}
+  {{- if default list (.Values.httpRoute).hosts }}
+  hostnames:
+    {{- range $host := .Values.httpRoute.hosts }}
+    - {{ $host }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: github-oidc-federation
+          port: 3000
+  {{- end }}
