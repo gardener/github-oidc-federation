@@ -6,8 +6,9 @@ labels:
         github_hostname: github.com
 resources:
   - name: envoy-proxy
-    version: distroless-v1.38.3
+    version: 1.38.3
     type: ociImage
+    relation: external
     access:
       type: ociRegistry
       imageReference: europe-docker.pkg.dev/gardener-project/releases/3rd/envoyproxy/envoy:distroless-v1.38.3
