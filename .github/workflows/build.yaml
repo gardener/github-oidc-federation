@@ -103,3 +103,7 @@ jobs:
           attribute: image.repository
         - ref: ocm-resource:github-oidc-federation.tag
           attribute: image.tag
+        - ref: ocm-resource:envoy-proxy.repository
+          attribute: gateway.proxyImage.repository
+        - ref: ocm-resource:envoy-proxy.tag
+          attribute: gateway.proxyImage.tag
