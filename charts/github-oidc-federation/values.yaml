@@ -5,6 +5,7 @@ gateway:
   className: ""
   annotations: {}
   proxyImage: {}  # optional: repository and tag to override the default envoy proxy image
+  loadBalancerIP: ""  # optional: pin the LB to a specific IP
 httpRoute:
   hosts: []
 networkPolicy:

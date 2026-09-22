@@ -28,6 +28,10 @@ spec:
                       labelSelector:
                         matchLabels:
                           gateway.envoyproxy.io/owning-gateway-name: {{ .Release.Name }}
+      {{- if (.Values.gateway).loadBalancerIP }}
+      envoyService:
+        loadBalancerIP: {{ .Values.gateway.loadBalancerIP }}
+      {{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
