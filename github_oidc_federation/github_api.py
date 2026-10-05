@@ -51,6 +51,7 @@ async def fetch_installation_token(token_request: models.TokenRequest, sub: str)
                 for permission, level in token_request.permissions.items()
             },
         },
+        timeout=10.0,
     )
     return token_res.to_json()
 
@@ -80,6 +81,7 @@ async def _get_installation_id_for_org(
                 'Authorization': f'Bearer {jwt_token}',
                 'Accept': 'application/vnd.github+json',
             },
+            timeout=10.0,
         )
     except Exception as e:
         logger.error(e)
@@ -115,6 +117,7 @@ async def fetch_raw_oidc_config(
                 'Authorization': f'Bearer {installation_token}',
                 'Accept': 'application/vnd.github+json',
             },
+            timeout=10.0,
         )
         content_b64 = contents_response.to_json()['content']
         return base64.b64decode(content_b64.replace('\n', '')).decode()
@@ -140,6 +143,7 @@ async def _get_app_installation_token(host: str, jwt_token: str, installation_id
                 'Accept': 'application/vnd.github+json',
             },
             json_body={},
+            timeout=10.0,
         )
     except Exception as e:
         logger.error(e)

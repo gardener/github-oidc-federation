@@ -1,3 +1,4 @@
+import asyncio
 import collections.abc
 import enum
 import logging
@@ -22,11 +23,19 @@ async def retrieve_oidc_federation_config(
         raise aiohttp.web.HTTPInternalServerError(
             reason=f'No matching GitHub App credentials for {token_request.repo_url}',
         )
-    oidc_federation_config = await _fetch_and_parse_oidc_config(
-        token_request.repo_url,
-        token_request.host,
-        credential,
-    )
+    try:
+        oidc_federation_config = await asyncio.wait_for(
+            _fetch_and_parse_oidc_config(
+                token_request.repo_url,
+                token_request.host,
+                credential,
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        raise aiohttp.web.HTTPServiceUnavailable(
+            reason='Timed out fetching oidc-federation-config',
+        )
 
     allowed_issuers = {entry.issuer for entry in oidc_federation_config}
     if token_request.issuer not in allowed_issuers:
