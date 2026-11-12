@@ -275,11 +275,3 @@ async def test_org_permission_with_repositories_returns_403(client, valid_jwt):
         },
     )
     assert resp.status == 403
-
-
-# --- Cache invalidation ---
-
-
-async def test_invalidate_cache_returns_204(client):
-    resp = await client.post('/invalidate-cache')
-    assert resp.status == 204

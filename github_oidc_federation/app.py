@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--port', default=3000, type=int)
     parser.add_argument('--github-app-credentials-path', default='/secrets')
     parser.add_argument('--expected-audience', default='github-oidc-federation')
+    parser.add_argument('--webhook-secret-path', default='/webhook-secret/token')
 
     return parser.parse_args()
 
@@ -79,11 +80,21 @@ def run_app() -> None:
     except OSError:
         logger.warning('K8s service account files not found — cache broadcast disabled')
 
+    webhook_secret = None
+    try:
+        with open(parsed_arguments.webhook_secret_path) as f:
+            webhook_secret = f.read().strip()
+    except OSError:
+        logger.warning(
+            'webhook secret not found — /invalidate-cache will reject all requests',
+        )
+
     app = build_app(
         github_app_credentials=github_app_credentials,
         expected_audience=parsed_arguments.expected_audience,
         k8s_sa_token=k8s_sa_token,
         k8s_namespace=k8s_namespace,
+        webhook_secret=webhook_secret,
     )
     aiohttp.web.run_app(app, host=host, port=port)
 
@@ -93,6 +104,7 @@ def build_app(
     expected_audience: str,
     k8s_sa_token: str | None = None,
     k8s_namespace: str | None = None,
+    webhook_secret: str | None = None,
 ) -> aiohttp.web.Application:
     async def on_startup(_):
         http_client.SESSION = aiohttp.ClientSession()
@@ -106,6 +118,7 @@ def build_app(
     app['expected_audience'] = expected_audience
     app['k8s_sa_token'] = k8s_sa_token
     app['k8s_namespace'] = k8s_namespace
+    app['webhook_secret'] = webhook_secret
 
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
