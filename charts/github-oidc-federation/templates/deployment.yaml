@@ -32,10 +32,16 @@ spec:
           volumeMounts:
             - name: github-oidc-federation
               mountPath: /secrets
+            - name: webhook-secret
+              mountPath: /webhook-secret
+              readOnly: true
       volumes:
         - name: github-oidc-federation
           secret:
             secretName: github-oidc-federation
+        - name: webhook-secret
+          secret:
+            secretName: github-oidc-federation-webhook
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
